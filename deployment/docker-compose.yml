@@ -1,0 +1,54 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.backend
+    container_name: backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/vulnscanner
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+
+  worker:
+    build:
+      context: ../workers
+      dockerfile: Dockerfile.worker
+    container_name: worker
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/vulnscanner
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      - backend
+      - redis
+
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  db:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vulnscanner
+    ports:
+      - "5432:5432"
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.frontend
+    container_name: frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
