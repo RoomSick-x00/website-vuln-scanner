@@ -20,4 +20,4 @@ and exposes structured reports via API or CLI/Web UI.
 - `frontend/` → CLI / web interface
 - `deployment/` → Dockerfiles + docker-compose
 - `docs/` → Architecture, DFD, workflow diagrams
-- `tests/` → Unit + integration tests
+- `tests/` → Unit + integration tests gfyh
