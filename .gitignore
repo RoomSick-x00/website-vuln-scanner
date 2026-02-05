@@ -1,0 +1,8 @@
+workers/scanner_modules/base.py
+workers/scanner_modules/dir_listing.py
+workers/scanner_modules/https_headers.py
+workers/scanner_modules/open_ports.py
+workers/scanner_modules/sqli.py
+workers/scanner_modules/tls.py
+workers/scanner_modules/xss.py
+workers/scanner_modules/xxe.py
