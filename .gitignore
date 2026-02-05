@@ -1,4 +1,2 @@
 workers/scanner_modules/sqli.py
 workers/scanner_modules/tls.py
-workers/scanner_modules/xss.py
-workers/scanner_modules/xxe.py
