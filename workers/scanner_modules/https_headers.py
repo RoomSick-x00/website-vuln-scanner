@@ -104,6 +104,13 @@ headers = [
     }
 ]
 
+# IF header missing:
+#     report missing
+# ELSE:
+#     IF check_type == exact AND observed != expected:
+#         report weak
+#     IF check_type == contains AND expected not in observed:
+#         report weak
 
 class HTTPHeadersScanner(BaseScanner):
     
@@ -114,6 +121,7 @@ class HTTPHeadersScanner(BaseScanner):
         try:
             response = requests.get(target, timeout=timeout)
             response_headers = {h.lower() for h in response.headers.keys()}
+            response_headers_values = {h.lower() for h in response.headers.values()}
             
             for header in headers:
                 header_name = header["name"].lower()
@@ -125,7 +133,23 @@ class HTTPHeadersScanner(BaseScanner):
                         "evidence": f"{header['name']} header not found in response headers",
                         "severity_hint": header["severity"]
                     })
-
+                else:
+                    if(header["check_type"] == 'exact' AND header["value"] not in response_header_values):
+                        missing_values = response_header_values - header["value"]
+                        findings.append({
+                        "module_name": self.name,
+                        "issue": f"{header['name']} header is weak.",
+                        "evidence": f"{header['name']} header has not found {missing_values} in response headers",
+                        "severity_hint": header["severity"]
+                        })
+                    else:
+                        findings.append({
+                        "module_name": self.name,
+                        "issue": f"{header['name']} header is weak but can be ignored.",
+                        "evidence": f"{header['name']} header has not found {missing_values} in response headers",
+                        "severity_hint": header["severity"]
+                        })
+                    
         except Exception:
             return []
         return findings
