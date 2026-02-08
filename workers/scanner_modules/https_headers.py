@@ -120,35 +120,53 @@ class HTTPHeadersScanner(BaseScanner):
         findings = []
         try:
             response = requests.get(target, timeout=timeout)
-            response_headers = {h.lower() for h in response.headers.keys()}
-            response_headers_values = {h.lower() for h in response.headers.values()}
+            response_headers = {
+                k.lower(): v.lower()
+                for k, v in response.headers.items()
+            }
             
             for header in headers:
-                header_name = header["name"].lower()
+                name = header["name"].lower()
+                check_type = header["check_type"]
 
-                if header_name not in response_headers:
+                if name not in response_headers:
                     findings.append({
                         "module_name": self.name,
                         "issue": f"{header['name']} header not found",
                         "evidence": f"{header['name']} header not found in response headers",
                         "severity_hint": header["severity"]
                     })
-                else:
-                    if(header["check_type"] == 'exact' AND header["value"] not in response_header_values):
-                        missing_values = response_header_values - header["value"]
+                    continue
+    
+                observed = response_headers[name] #wo headers k name jo missing nhi hai
+                if check_type == "exact":       
+                    if observed != header["value"].lower():
                         findings.append({
                         "module_name": self.name,
                         "issue": f"{header['name']} header is weak.",
-                        "evidence": f"{header['name']} header has not found {missing_values} in response headers",
+                        "evidence": f"{header['name']} header has not found some values with exact int in response headers",
                         "severity_hint": header["severity"]
                         })
-                    else:
+                        pass
+                        
+                elif check_type == "contains": 
+                    if header["value"].lower() not in observed:
                         findings.append({
                         "module_name": self.name,
-                        "issue": f"{header['name']} header is weak but can be ignored.",
-                        "evidence": f"{header['name']} header has not found {missing_values} in response headers",
+                        "issue": f"{header['name']} header is weak but needs some minor changes.",
+                        "evidence": f"{header['name']} header has not found in response headers",
                         "severity_hint": header["severity"]
                         })
+                        pass
+                    
+                elif check_type == "present":
+                    findings.append({
+                        "module_name": self.name,
+                        "issue": f"{header['name']} header is weak but can be ignored.",
+                        "evidence": f"{header['name']} header has not found in response headers",
+                        "severity_hint": header["severity"]
+                        })
+                    pass
                     
         except Exception:
             return []
