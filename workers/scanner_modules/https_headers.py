@@ -6,83 +6,104 @@ from scanners.base import BaseScanner
 headers = [
     {
         "name": "Cache-Control",
-        "value": "no-store, max-age=0",
-        "severity": "low",
+        "value": "no-store",
+        "severity": "medium",
+        "check_type": "contains",
         "description": "Prevents sensitive data from being cached by browsers or proxies."
     },
     {
         "name": "Clear-Site-Data",
         "value": "\"cache\",\"cookies\",\"storage\"",
         "severity": "low",
+        "check_type": "present",
         "description": "Clears client-side storage to protect user data."
     },
     {
         "name": "Content-Security-Policy",
-        "value": "default-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests",
+        "value": "default-src 'self'",
         "severity": "high",
+        "check_type": "contains",
         "description": "Mitigates XSS, data injection, and clickjacking attacks."
     },
     {
         "name": "Cross-Origin-Embedder-Policy",
         "value": "require-corp",
         "severity": "high",
+        "check_type": "exact",
         "description": "Prevents loading cross-origin resources without explicit permission."
     },
     {
         "name": "Cross-Origin-Opener-Policy",
         "value": "same-origin",
         "severity": "high",
+        "check_type": "exact",
         "description": "Isolates browsing context to prevent cross-origin data leaks."
     },
     {
         "name": "Cross-Origin-Resource-Policy",
         "value": "same-origin",
         "severity": "high",
+        "check_type": "exact",
         "description": "Prevents other origins from reading responses."
     },
     {
         "name": "Permissions-Policy",
-        "value": "accelerometer=(), autoplay=(), camera=(), cross-origin-isolated=(), display-capture=(), encrypted-media=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), sync-xhr=(self), usb=(), web-share=(), xr-spatial-tracking=(), clipboard-read=(), clipboard-write=(), gamepad=(), hid=(), idle-detection=(), interest-cohort=(), serial=(), unload=()",
+        "value": "geolocation=(), microphone=(), camera=()",
         "severity": "medium",
+        "check_type": "present",
         "description": "Restricts access to powerful browser features."
     },
     {
         "name": "Referrer-Policy",
         "value": "no-referrer",
         "severity": "medium",
+        "check_type": "exact",
         "description": "Controls how much referrer information is sent with requests."
     },
     {
         "name": "Strict-Transport-Security",
-        "value": "max-age=31536000; includeSubDomains",
+        "value": "max-age=31536000",
         "severity": "high",
+        "check_type": "contains",
         "description": "Enforces HTTPS and prevents SSL stripping attacks."
     },
     {
         "name": "X-Content-Type-Options",
         "value": "nosniff",
         "severity": "medium",
+        "check_type": "exact",
         "description": "Prevents MIME type sniffing by browsers."
     },
     {
         "name": "X-DNS-Prefetch-Control",
         "value": "off",
         "severity": "low",
+        "check_type": "exact",
         "description": "Controls DNS prefetching to improve privacy."
     },
     {
         "name": "X-Frame-Options",
-        "value": "deny",
+        "allowed_values": ["deny", "sameorigin"],
         "severity": "medium",
+        "check_type": "one_of",
         "description": "Prevents clickjacking by disallowing framing."
     },
     {
         "name": "X-Permitted-Cross-Domain-Policies",
         "value": "none",
         "severity": "low",
+        "check_type": "exact",
         "description": "Restricts Adobe Flash and PDF cross-domain access."
+    },
+    {
+        "name": "Origin-Agent-Cluster",
+        "value": "?1",
+        "severity": "low",
+        "check_type": "exact",
+        "description": "Improves isolation of origin-based data."
     }
 ]
+
 
 class HTTPHeadersScanner(BaseScanner):
     
