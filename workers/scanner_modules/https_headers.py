@@ -1,4 +1,5 @@
 # scanners/http_headers.py
+import requests
 
 from scanners.base import BaseScanner
 
@@ -107,4 +108,7 @@ class HTTPHeadersScanner(BaseScanner):
         except Exception:
             return []
         return findings
+
+# for header in headers:
+#     print(header["value"])
 
