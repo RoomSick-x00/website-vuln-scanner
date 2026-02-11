@@ -1,1 +1,0 @@
-from scanners.base import BaseScanner
