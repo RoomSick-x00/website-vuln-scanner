@@ -1,14 +1,31 @@
-import ssl
+from urllib.parse import urlparse
 import socket
+import ssl
 
-host = "google.com"
-port = 443
+class TLSScanner():
+    name = "tls"
+    
+    def scan(self, target: str, timeout: int):
+        findings = []
+        
+        parsed = urlparse(target)
+        host = parsed.hostname
+        port = parsed.port or 443
+        
+        context = ssl.create_default_context()
 
-context = ssl.create_default_context()
+        sock = socket.create_connection((host, port), timeout=timeout)
+        tls_sock = context.wrap_socket(sock, server_hostname=host)
 
-sock = socket.create_connection((host, port))
-tls_sock = context.wrap_socket(sock, server_hostname=host)
+        tls_version = tls_sock.version()
 
-print(tls_sock.version())
+        findings.append({
+            "module_name": self.name,
+            "issue": "TLS connection established",
+            "evidence": f"Negotiated protocol: {tls_version}",
+            "severity_hint": "info"
+        })
 
-tls_sock.close()
+        tls_sock.close()
+
+        return findings 
