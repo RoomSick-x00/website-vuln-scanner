@@ -1,8 +1,7 @@
-# scanners/tls.py
 import ssl
 import socket
 
-host = "example.com"
+host = "google.com"
 port = 443
 
 context = ssl.create_default_context()
@@ -13,17 +12,3 @@ tls_sock = context.wrap_socket(sock, server_hostname=host)
 print(tls_sock.version())
 
 tls_sock.close()
-
-from scanners.base import BaseScanner
-
-class TLSScanner(BaseScanner):
-    name = "tls"
-
-    def scan(self, target: str, timeout: int):
-        findings = []
-        try:
-            # logic later
-            pass
-        except Exception:
-            return []
-        return findings
