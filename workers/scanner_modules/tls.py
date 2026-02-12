@@ -1,4 +1,4 @@
-from urllib.parse import urlparse
+from urllib.parse import urlparse #url disection tool
 import socket
 import ssl
 
@@ -12,10 +12,10 @@ class TLSScanner():
         host = parsed.hostname
         port = parsed.port or 443
         
-        context = ssl.create_default_context()
+        context = ssl.create_default_context() #creates secure TLS configuration
 
         sock = socket.create_connection((host, port), timeout=timeout)
-        tls_sock = context.wrap_socket(sock, server_hostname=host)
+        tls_sock = context.wrap_socket(sock, server_hostname=host) # performs tls handshake, negotiates tls version, verifies certificate 
 
         tls_version = tls_sock.version()
 
