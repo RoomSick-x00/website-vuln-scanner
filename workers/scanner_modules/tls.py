@@ -14,15 +14,32 @@ class TLSScanner():
         
         # A configuration object that defines how TLS should behave.
         context = ssl.create_default_context() #creates secure TLS configuration
-
-        sock = socket.create_connection((host, port), timeout=timeout) #opens a tcp connection to the server
-        tls_sock = context.wrap_socket(sock, server_hostname=host) # performs tls handshake, negotiates tls version, verifies certificate 
+        
+        if not host:
+            return findings
+        
+        try:
+            sock = socket.create_connection((host, port), timeout=timeout) #opens a tcp connection to the server
+        except OSError:
+            return findings
+            
+        try:
+            tls_sock = context.wrap_socket(sock, server_hostname=host) # performs tls handshake, negotiates tls version, verifies certificate 
+        except ssl.SSLError as e:
+            findings.append({
+                "module_name": self.name,
+                "issue": "TLS handshake failed",
+                "evidence": str(e),
+                "severity_hint": "medium"
+            })
+            sock.close()
+            return findings
 
         tls_version = tls_sock.version()
 
         findings.append({
             "module_name": self.name,
-            "issue": "TLS connection established",
+            "issue": "TLS protocol negotiated",
             "evidence": f"Negotiated protocol: {tls_version}",
             "severity_hint": "info"
         })
