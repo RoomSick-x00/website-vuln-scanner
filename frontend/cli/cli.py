@@ -1,2 +1,0 @@
-input = input("Enter")
-#hi
