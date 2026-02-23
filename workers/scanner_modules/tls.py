@@ -1,74 +1,93 @@
-from urllib.parse import urlparse #url disection tool
+from urllib.parse import urlparse
 import socket
 import ssl
-from datetime import datetime
+from datetime import datetime, timezone
 
-class TLSScanner():
+# Optional but recommended
+try:
+    from cryptography import x509
+    from cryptography.x509.oid import NameOID
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    CRYPTO_AVAILABLE = True
+except ImportError:
+    CRYPTO_AVAILABLE = False
+
+
+class TLSScanner:
     name = "tls"
-    
+
     def scan(self, target: str, timeout: int):
         findings = []
-        
+
         parsed = urlparse(target)
         host = parsed.hostname
         port = parsed.port or 443
-        
-        # A configuration object that defines how TLS should behave.
-        context = ssl.create_default_context() #creates secure TLS configuration
-        
+
         if not host:
             return findings
-        
+
+        # Use properly initialized client context
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+
+        sock = None
+        tls_sock = None
+
         try:
-            sock = socket.create_connection((host, port), timeout=timeout) #opens a tcp connection to the server
-        except OSError:
-            return findings
+            sock = socket.create_connection((host, port), timeout=timeout)
+            tls_sock = context.wrap_socket(sock, server_hostname=host)
+
+            # TLS version
+            findings.append({
+                "module_name": self.name,
+                "issue": "TLS protocol negotiated",
+                "evidence": f"Negotiated protocol: {tls_sock.version()}",
+                "severity_hint": "info"
+            })
+
+            # Certificate checks
+            findings.extend(self._check_certificate(tls_sock, host))
+
+            # Cipher + Forward Secrecy
+            findings.extend(self._check_cipher(tls_sock))
+
+            # TLS version matrix
+            findings.extend(self._probe_tls_versions(host, port, timeout))
             
-        try:
-            tls_sock = context.wrap_socket(sock, server_hostname=host) # performs tls handshake, negotiates tls version, verifies certificate 
+            findings.extend(self._check_forward_secrecy_support(host, port, timeout))
+
         except ssl.SSLError as e:
             findings.append({
                 "module_name": self.name,
                 "issue": "TLS handshake failed",
                 "evidence": str(e),
+                "severity_hint": "high"
+            })
+
+        except OSError as e:
+            findings.append({
+                "module_name": self.name,
+                "issue": "Connection failed",
+                "evidence": str(e),
                 "severity_hint": "medium"
             })
-            sock.close()
-            return findings
 
-        # Step 1: Check TLS version
-        tls_version = tls_sock.version()
-        findings.append({
-            "module_name": self.name,
-            "issue": "TLS protocol negotiated",
-            "evidence": f"Negotiated protocol: {tls_version}",
-            "severity_hint": "info"
-        })
-
-        # Step 2: Certificate observations (only if TLS version check passed)
-        cert_findings = self._check_certificate(tls_sock, host)
-        findings.extend(cert_findings)
-        
-        # If certificate check found critical issues, skip cryptographic details
-        if any(f.get("severity_hint") == "high" for f in cert_findings):
-            tls_sock.close()
-            return findings
-
-        # Step 3: Check cryptographic details (only if certificate check passed)
-        crypto_findings = self._check_cryptographic_details(host, port, timeout)
-        findings.extend(crypto_findings)
-
-        tls_sock.close()
+        finally:
+            if tls_sock:
+                tls_sock.close()
+            elif sock:
+                sock.close()
 
         return findings
-    
+
     def _check_certificate(self, tls_sock, host):
-        """Check certificate issuer, expiration date, and subject"""
         findings = []
-        
+
         try:
-            cert = tls_sock.getpeercert()
-            if not cert:
+            cert_der = tls_sock.getpeercert(binary_form=True)
+
+            if not cert_der:
                 findings.append({
                     "module_name": self.name,
                     "issue": "Certificate not available",
@@ -76,203 +95,217 @@ class TLSScanner():
                     "severity_hint": "medium"
                 })
                 return findings
-            
-            # Check certificate expiration
-            not_after = cert.get('notAfter')
-            if not_after:
-                try:
-                    # Parse date format: "Dec 31 23:59:59 2024 GMT"
-                    exp_date = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
-                    days_until_expiry = (exp_date - datetime.utcnow()).days
-                    
-                    if days_until_expiry < 0:
-                        findings.append({
-                            "module_name": self.name,
-                            "issue": "Certificate expired",
-                            "evidence": f"Certificate expired on {not_after}",
-                            "severity_hint": "high"
-                        })
-                    elif days_until_expiry < 30:
-                        findings.append({
-                            "module_name": self.name,
-                            "issue": "Certificate expiring soon",
-                            "evidence": f"Certificate expires in {days_until_expiry} days ({not_after})",
-                            "severity_hint": "medium"
-                        })
-                    else:
-                        findings.append({
-                            "module_name": self.name,
-                            "issue": "Certificate expiration check",
-                            "evidence": f"Certificate valid until {not_after} ({days_until_expiry} days remaining)",
-                            "severity_hint": "info"
-                        })
-                except ValueError:
-                    findings.append({
-                        "module_name": self.name,
-                        "issue": "Certificate expiration date parsing failed",
-                        "evidence": f"Could not parse expiration date: {not_after}",
-                        "severity_hint": "low"
-                    })
-            
-            # Check certificate issuer
-            issuer = cert.get('issuer')
-            if issuer:
-                issuer_str = ', '.join([f"{k}={v}" for item in issuer for k, v in item])
+
+            if not CRYPTO_AVAILABLE:
                 findings.append({
                     "module_name": self.name,
-                    "issue": "Certificate issuer",
-                    "evidence": f"Issuer: {issuer_str}",
-                    "severity_hint": "info"
+                    "issue": "Cryptography library missing",
+                    "evidence": "Install 'cryptography' to enable certificate analysis",
+                    "severity_hint": "low"
                 })
-            
-            # Check certificate subject
-            subject = cert.get('subject')
-            if subject:
-                subject_str = ', '.join([f"{k}={v}" for item in subject for k, v in item])
-                # Check if subject matches hostname
-                subjectAltName = cert.get('subjectAltName', [])
-                host_matched = False
-                
-                if subjectAltName:
-                    for san_type, san_value in subjectAltName:
-                        if san_type == 'DNS' and san_value == host:
-                            host_matched = True
-                            break
-                
+                return findings
+
+            cert_obj = x509.load_der_x509_certificate(cert_der)
+
+            # Expiration
+            exp_date = cert_obj.not_valid_after_utc
+            now = datetime.now(timezone.utc)
+            days_until_expiry = (exp_date - now).days
+
+            if days_until_expiry < 0:
+                issue = "Certificate expired"
+                severity = "high"
+            elif days_until_expiry < 30:
+                issue = "Certificate expiring soon"
+                severity = "medium"
+            else:
+                issue = "Certificate valid"
+                severity = "info"
+
+            findings.append({
+                "module_name": self.name,
+                "issue": issue,
+                "evidence": f"Expires on {exp_date} ({days_until_expiry} days remaining)",
+                "severity_hint": severity
+            })
+
+            # Issuer / Subject
+            findings.append({
+                "module_name": self.name,
+                "issue": "Certificate issuer",
+                "evidence": cert_obj.issuer.rfc4514_string(),
+                "severity_hint": "info"
+            })
+
+            findings.append({
+                "module_name": self.name,
+                "issue": "Certificate subject",
+                "evidence": cert_obj.subject.rfc4514_string(),
+                "severity_hint": "info"
+            })
+
+            # Signature Algorithm Check
+            sig_algo = cert_obj.signature_hash_algorithm.name.lower()
+            if sig_algo in ["sha1", "md5"]:
+                findings.append({
+                    "module_name": self.name,
+                    "issue": "Weak certificate signature algorithm",
+                    "evidence": f"Signature algorithm: {sig_algo}",
+                    "severity_hint": "high"
+                })
+
+            # SAN / Hostname validation
+            try:
+                san_ext = cert_obj.extensions.get_extension_for_class(
+                    x509.SubjectAlternativeName
+                )
+                san_list = san_ext.value.get_values_for_type(x509.DNSName)
+
+                host_matched = any(
+                    host == name or
+                    (name.startswith("*.") and host.endswith(name[1:]))
+                    for name in san_list
+                )
+
                 if not host_matched:
-                    # Check commonName in subject
-                    for item in subject:
-                        for key, value in item:
-                            if key == 'commonName' and value == host:
-                                host_matched = True
-                                break
-                    
-                    if not host_matched:
-                        findings.append({
-                            "module_name": self.name,
-                            "issue": "Certificate subject mismatch",
-                            "evidence": f"Certificate subject '{subject_str}' does not match hostname '{host}'",
-                            "severity_hint": "high"
-                        })
-                    else:
-                        findings.append({
-                            "module_name": self.name,
-                            "issue": "Certificate subject",
-                            "evidence": f"Subject: {subject_str}",
-                            "severity_hint": "info"
-                        })
+                    findings.append({
+                        "module_name": self.name,
+                        "issue": "Certificate subject mismatch",
+                        "evidence": f"Certificate does not match hostname {host}",
+                        "severity_hint": "high"
+                    })
+
+            except Exception:
+                pass
+
+            # Public key strength
+            public_key = cert_obj.public_key()
+
+            if isinstance(public_key, rsa.RSAPublicKey):
+                key_size = public_key.key_size
+                if key_size < 2048:
+                    findings.append({
+                        "module_name": self.name,
+                        "issue": "Weak RSA key size",
+                        "evidence": f"RSA key size is {key_size} bits",
+                        "severity_hint": "high"
+                    })
                 else:
                     findings.append({
                         "module_name": self.name,
-                        "issue": "Certificate subject",
-                        "evidence": f"Subject: {subject_str}",
+                        "issue": "RSA key strength",
+                        "evidence": f"RSA key size is {key_size} bits",
                         "severity_hint": "info"
                     })
-            
+
         except Exception as e:
             findings.append({
                 "module_name": self.name,
                 "issue": "Certificate check failed",
-                "evidence": f"Error during certificate check: {str(e)}",
+                "evidence": str(e),
                 "severity_hint": "medium"
             })
-        
+
         return findings
-    
-    def _check_cryptographic_details(self, host, port, timeout):
-        """Check cipher suite, TLS 1.0 support, and weak ciphers"""
+
+    def _check_cipher(self, tls_sock):
         findings = []
+
+        cipher = tls_sock.cipher()
+        if not cipher:
+            return findings
+
+        cipher_name = cipher[0]
+        tls_version = tls_sock.version()
+
+        findings.append({
+            "module_name": self.name,
+            "issue": "Cipher suite",
+            "evidence": f"Negotiated cipher: {cipher_name}",
+            "severity_hint": "info"
+        })
         
-        try:
-            # Get cipher suite from existing connection
-            sock = socket.create_connection((host, port), timeout=timeout)
-            context = ssl.create_default_context()
-            tls_sock = context.wrap_socket(sock, server_hostname=host)
-            
-            cipher = tls_sock.cipher()
-            if cipher:
-                cipher_name = cipher[0]
-                findings.append({
-                    "module_name": self.name,
-                    "issue": "Cipher suite",
-                    "evidence": f"Negotiated cipher: {cipher_name}",
-                    "severity_hint": "info"
-                })
-                
-                # Check for weak ciphers
-                weak_ciphers = [
-                    'RC4', 'DES', 'MD5', 'SHA1', 'NULL', 'EXPORT', 
-                    'ANON', 'ADH', 'AECDH', 'CBC', '3DES', 'TLS_RSA'
-                ]
-                cipher_upper = cipher_name.upper()
-                weak_found = [w for w in weak_ciphers if w in cipher_upper]
-                
-                if weak_found:
-                    findings.append({
-                        "module_name": self.name,
-                        "issue": "Weak cipher detected",
-                        "evidence": f"Cipher '{cipher_name}' contains weak components: {', '.join(weak_found)}",
-                        "severity_hint": "high"
-                    })
-            
-            tls_sock.close()
-            
-            # Probe for TLS 1.0 support
-            tls10_supported = self._probe_tls10(host, port, timeout)
-            if tls10_supported:
-                findings.append({
-                    "module_name": self.name,
-                    "issue": "TLS 1.0 enabled",
-                    "evidence": "Server accepts TLS 1.0 connections (deprecated and insecure)",
-                    "severity_hint": "high"
-                })
-            else:
-                findings.append({
-                    "module_name": self.name,
-                    "issue": "TLS 1.0 check",
-                    "evidence": "TLS 1.0 is not supported (good)",
-                    "severity_hint": "info"
-                })
-            
-        except Exception as e:
+        # Weak algorithms
+        weak_indicators = ["RC4", "3DES", "DES", "NULL", "MD5"]
+        if any(w in cipher_name.upper() for w in weak_indicators):
             findings.append({
                 "module_name": self.name,
-                "issue": "Cryptographic details check failed",
-                "evidence": f"Error during cryptographic check: {str(e)}",
-                "severity_hint": "medium"
+                "issue": "Weak cipher detected",
+                "evidence": f"{cipher_name} contains deprecated algorithm",
+                "severity_hint": "high"
             })
-        
+
+        return findings
+
+    def _probe_tls_versions(self, host, port, timeout):
+        findings = []
+        supported = []
+
+        versions = {
+            "TLSv1.0": ssl.TLSVersion.TLSv1,
+            "TLSv1.1": ssl.TLSVersion.TLSv1_1,
+            "TLSv1.2": ssl.TLSVersion.TLSv1_2,
+            "TLSv1.3": ssl.TLSVersion.TLSv1_3,
+        }
+
+        for name, version in versions.items():
+            try:
+                context = ssl.create_default_context()
+                context.minimum_version = version
+                context.maximum_version = version
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+
+                sock = socket.create_connection((host, port), timeout=timeout)
+                tls_sock = context.wrap_socket(sock, server_hostname=host)
+
+                if tls_sock.version():
+                    supported.append(name)
+
+                tls_sock.close()
+
+            except Exception:
+                continue
+
+        findings.append({
+            "module_name": self.name,
+            "issue": "Supported TLS versions",
+            "evidence": f"Supported: {', '.join(supported)}",
+            "severity_hint": "info"
+        })
+
+        if "TLSv1.0" in supported or "TLSv1.1" in supported:
+            findings.append({
+                "module_name": self.name,
+                "issue": "Deprecated TLS versions enabled",
+                "evidence": "Server supports TLS 1.0 or TLS 1.1",
+                "severity_hint": "high"
+            })
+
         return findings
     
-    def _probe_tls10(self, host, port, timeout):
-        """Probe if server accepts TLS 1.0 connections"""
+    def _check_forward_secrecy_support(self, host, port, timeout):
+        findings = []
+
         try:
-            sock = socket.create_connection((host, port), timeout=timeout)
-            # Create context that allows TLS 1.0
-            try:
-                # Python 3.7+ approach
-                context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-                context.minimum_version = ssl.TLSVersion.MINIMUM_SUPPORTED
-                context.maximum_version = ssl.TLSVersion.TLSv1
-            except AttributeError:
-                # Fallback for older Python versions
-                context = ssl.SSLContext(ssl.PROTOCOL_TLS)
-                # Try to set TLS 1.0 as maximum
-                try:
-                    context.options &= ~ssl.OP_NO_TLSv1
-                    context.options |= ssl.OP_NO_TLSv1_1
-                    context.options |= ssl.OP_NO_TLSv1_2
-                    context.options |= ssl.OP_NO_TLSv1_3
-                except AttributeError:
-                    pass
-            
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            context.set_ciphers("RSA")
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
-            
+
+            sock = socket.create_connection((host, port), timeout=timeout)
             tls_sock = context.wrap_socket(sock, server_hostname=host)
-            version = tls_sock.version()
+
+            findings.append({
+                "module_name": self.name,
+                "issue": "Server supports non-Forward Secrecy ciphers",
+                "evidence": "Handshake succeeded with static RSA cipher",
+                "severity_hint": "medium"
+            })
+
             tls_sock.close()
-            # Check if negotiated version is TLS 1.0
-            return version in ['TLSv1', 'TLSv1.0']
-        except (ssl.SSLError, OSError, AttributeError):
-            return False 
+
+        except Exception:
+            pass
+
+        return findings
