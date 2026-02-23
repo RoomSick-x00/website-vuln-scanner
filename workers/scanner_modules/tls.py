@@ -7,11 +7,11 @@ from datetime import datetime, timezone
 try:
     from cryptography import x509
     from cryptography.x509.oid import NameOID
-    from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives.asymmetric import rsa
     CRYPTO_AVAILABLE = True
 except ImportError:
     CRYPTO_AVAILABLE = False
+
 
 class TLSScanner:
     name = "tls"
@@ -26,7 +26,8 @@ class TLSScanner:
         if not host:
             return findings
 
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        # Use properly initialized client context
+        context = ssl.create_default_context()
         context.check_hostname = False
         context.verify_mode = ssl.CERT_NONE
 
@@ -34,10 +35,9 @@ class TLSScanner:
         tls_sock = None
 
         try:
-            print("Connecting to:", host)
             sock = socket.create_connection((host, port), timeout=timeout)
             tls_sock = context.wrap_socket(sock, server_hostname=host)
-            
+
             # TLS version
             findings.append({
                 "module_name": self.name,
@@ -47,8 +47,7 @@ class TLSScanner:
             })
 
             # Certificate checks
-            cert_findings = self._check_certificate(tls_sock, host)
-            findings.extend(cert_findings)
+            findings.extend(self._check_certificate(tls_sock, host))
 
             # Cipher + Forward Secrecy
             findings.extend(self._check_cipher(tls_sock))
@@ -84,7 +83,6 @@ class TLSScanner:
         findings = []
 
         try:
-            # Get raw certificate (works even with CERT_NONE)
             cert_der = tls_sock.getpeercert(binary_form=True)
 
             if not cert_der:
@@ -105,21 +103,22 @@ class TLSScanner:
                 })
                 return findings
 
-            cert_obj = x509.load_der_x509_certificate(cert_der, default_backend())
+            cert_obj = x509.load_der_x509_certificate(cert_der)
 
+            # Expiration
             exp_date = cert_obj.not_valid_after_utc
             now = datetime.now(timezone.utc)
             days_until_expiry = (exp_date - now).days
 
             if days_until_expiry < 0:
-                severity = "high"
                 issue = "Certificate expired"
+                severity = "high"
             elif days_until_expiry < 30:
-                severity = "medium"
                 issue = "Certificate expiring soon"
+                severity = "medium"
             else:
-                severity = "info"
                 issue = "Certificate valid"
+                severity = "info"
 
             findings.append({
                 "module_name": self.name,
@@ -128,28 +127,37 @@ class TLSScanner:
                 "severity_hint": severity
             })
 
-            issuer = cert_obj.issuer.rfc4514_string()
+            # Issuer / Subject
             findings.append({
                 "module_name": self.name,
                 "issue": "Certificate issuer",
-                "evidence": issuer,
+                "evidence": cert_obj.issuer.rfc4514_string(),
                 "severity_hint": "info"
             })
 
-            subject = cert_obj.subject.rfc4514_string()
             findings.append({
                 "module_name": self.name,
                 "issue": "Certificate subject",
-                "evidence": subject,
+                "evidence": cert_obj.subject.rfc4514_string(),
                 "severity_hint": "info"
             })
 
+            # Signature Algorithm Check
+            sig_algo = cert_obj.signature_hash_algorithm.name.lower()
+            if sig_algo in ["sha1", "md5"]:
+                findings.append({
+                    "module_name": self.name,
+                    "issue": "Weak certificate signature algorithm",
+                    "evidence": f"Signature algorithm: {sig_algo}",
+                    "severity_hint": "high"
+                })
 
+            # SAN / Hostname validation
             try:
-                san_extension = cert_obj.extensions.get_extension_for_class(
+                san_ext = cert_obj.extensions.get_extension_for_class(
                     x509.SubjectAlternativeName
                 )
-                san_list = san_extension.value.get_values_for_type(x509.DNSName)
+                san_list = san_ext.value.get_values_for_type(x509.DNSName)
 
                 host_matched = any(
                     host == name or
@@ -168,6 +176,7 @@ class TLSScanner:
             except Exception:
                 pass
 
+            # Public key strength
             public_key = cert_obj.public_key()
 
             if isinstance(public_key, rsa.RSAPublicKey):
@@ -207,10 +216,15 @@ class TLSScanner:
         cipher_name = cipher[0]
         tls_version = tls_sock.version()
 
-        if tls_version == "TLSv1.3":
-            # TLS 1.3 always provides forward secrecy
-            pass
-        else:
+        findings.append({
+            "module_name": self.name,
+            "issue": "Cipher suite",
+            "evidence": f"Negotiated cipher: {cipher_name}",
+            "severity_hint": "info"
+        })
+
+        # Forward Secrecy
+        if tls_version != "TLSv1.3":
             if "ECDHE" not in cipher_name and "DHE" not in cipher_name:
                 findings.append({
                     "module_name": self.name,
@@ -244,7 +258,7 @@ class TLSScanner:
 
         for name, version in versions.items():
             try:
-                context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                context = ssl.create_default_context()
                 context.minimum_version = version
                 context.maximum_version = version
                 context.check_hostname = False
