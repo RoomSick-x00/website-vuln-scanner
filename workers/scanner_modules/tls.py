@@ -54,6 +54,8 @@ class TLSScanner:
 
             # TLS version matrix
             findings.extend(self._probe_tls_versions(host, port, timeout))
+            
+            findings.extend(self._check_forward_secrecy_support(host, port, timeout))
 
         except ssl.SSLError as e:
             findings.append({
@@ -222,17 +224,7 @@ class TLSScanner:
             "evidence": f"Negotiated cipher: {cipher_name}",
             "severity_hint": "info"
         })
-
-        # Forward Secrecy
-        if tls_version != "TLSv1.3":
-            if "ECDHE" not in cipher_name and "DHE" not in cipher_name:
-                findings.append({
-                    "module_name": self.name,
-                    "issue": "No Forward Secrecy",
-                    "evidence": f"{cipher_name} does not support Forward Secrecy",
-                    "severity_hint": "medium"
-                })
-
+        
         # Weak algorithms
         weak_indicators = ["RC4", "3DES", "DES", "NULL", "MD5"]
         if any(w in cipher_name.upper() for w in weak_indicators):
@@ -289,5 +281,31 @@ class TLSScanner:
                 "evidence": "Server supports TLS 1.0 or TLS 1.1",
                 "severity_hint": "high"
             })
+
+        return findings
+    
+    def _check_forward_secrecy_support(self, host, port, timeout):
+        findings = []
+
+        try:
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            context.set_ciphers("RSA")
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+
+            sock = socket.create_connection((host, port), timeout=timeout)
+            tls_sock = context.wrap_socket(sock, server_hostname=host)
+
+            findings.append({
+                "module_name": self.name,
+                "issue": "Server supports non-Forward Secrecy ciphers",
+                "evidence": "Handshake succeeded with static RSA cipher",
+                "severity_hint": "medium"
+            })
+
+            tls_sock.close()
+
+        except Exception:
+            pass
 
         return findings
