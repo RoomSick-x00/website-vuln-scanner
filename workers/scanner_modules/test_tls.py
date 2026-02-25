@@ -3,7 +3,7 @@ from workers.scanner_modules.tls import TLSScanner
 
 scanner = TLSScanner()
 
-target = "https://no-forward-secrecy.badssl.com:1012"
+target = "https://google.com"
 results = scanner.scan(target, timeout=5)
 
 for finding in results:
