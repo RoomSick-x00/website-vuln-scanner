@@ -20,7 +20,7 @@ def _finding(issue: str, evidence: str, severity: str, remediation: str = "", sc
     Canonical finding shape used across all scanner modules.
 
     severity:     "info" | "low" | "medium" | "high" | "critical"
-    score_penalty: how many points this deducts from the site's total score (0-100 scale)
+    score_penalty: how many points this deducts from the site's total score (0–100 scale)
     remediation:  human-readable fix guidance shown in the report
     """
     return {
@@ -40,33 +40,6 @@ def _finding(issue: str, evidence: str, severity: str, remediation: str = "", sc
 class TLSScanner:
     name = "tls"
 
-    def _make_strict_context(self) -> ssl.SSLContext:
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        return ctx
-
-    def _make_permissive_context(self) -> ssl.SSLContext:
-        """
-        Permissive context used to characterize misconfigured servers that
-        fail a modern/secure handshake (e.g., RC4-only). This is NOT browser-like.
-        """
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        try:
-            # OpenSSL: allow legacy/insecure ciphers and lower security level.
-            ctx.set_ciphers("ALL:@SECLEVEL=0")
-        except Exception:
-            # If OpenSSL build doesn't support SECLEVEL string, continue with best effort.
-            pass
-        try:
-            # Allow probing of legacy TLS where the runtime permits it.
-            ctx.minimum_version = ssl.TLSVersion.TLSv1
-        except Exception:
-            pass
-        return ctx
-
     def scan(self, target: str, timeout: int = 10) -> list[dict]:
         findings = []
 
@@ -83,103 +56,57 @@ class TLSScanner:
             ))
             return findings
 
-        def connect_with(ctx: ssl.SSLContext) -> ssl.SSLSocket:
-            s = socket.create_connection((host, port), timeout=timeout)
-            try:
-                return ctx.wrap_socket(s, server_hostname=host)
-            except Exception:
-                s.close()
-                raise
+        # ── Primary connection (CERT_NONE so we can always retrieve the cert) ──
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
 
-        strict_err: Exception | None = None
-        strict_ok = False
-
-        # ── Pass 1 (strict / browser-like handshake policy) ──
-        tls_sock = None
+        sock = tls_sock = None
         try:
-            tls_sock = connect_with(self._make_strict_context())
-            strict_ok = True
+            sock = socket.create_connection((host, port), timeout=timeout)
+            tls_sock = context.wrap_socket(sock, server_hostname=host)
 
             findings.append(_finding(
                 "TLS protocol negotiated",
                 f"Negotiated protocol: {tls_sock.version()}",
                 "info",
             ))
+
             findings.extend(self._check_certificate(tls_sock, host))
             findings.extend(self._check_cipher(tls_sock))
 
         except ssl.SSLError as e:
-            strict_err = e
             findings.append(_finding(
-                "TLS handshake failed with secure settings",
+                "TLS handshake failed",
                 str(e),
-                "critical",
-                "A modern TLS client could not complete a secure handshake. This often indicates the server "
-                "only supports deprecated TLS versions and/or weak cipher suites (e.g., RC4). Enable TLS 1.2+ "
-                "and strong AEAD ciphers (AES-GCM/CHACHA20) and disable RC4/3DES/DES.",
+                "high",
+                "Ensure the server has a valid TLS certificate and supports TLS 1.2+.",
                 score_penalty=40,
             ))
+            return findings  # No point running further checks
+
         except OSError as e:
-            strict_err = e
+            findings.append(_finding(
+                "Connection failed",
+                str(e),
+                "medium",
+                "Check that the host is reachable and port 443 is open.",
+                score_penalty=20,
+            ))
+            return findings
+
         finally:
             if tls_sock:
                 tls_sock.close()
-
-        # ── Pass 2 (permissive) ──
-        permissive_ok = False
-        if not strict_ok:
-            tls_sock = None
-            try:
-                tls_sock = connect_with(self._make_permissive_context())
-                permissive_ok = True
-
-                findings.append(_finding(
-                    "TLS protocol negotiated (permissive)",
-                    f"Negotiated protocol: {tls_sock.version()}",
-                    "info",
-                ))
-                findings.extend(self._check_certificate(tls_sock, host))
-                findings.extend(self._check_cipher(tls_sock))
-
-            except OSError as e:
-                # If strict already hit a network error, this will likely match; we report once below.
-                strict_err = strict_err or e
-            except ssl.SSLError as e:
-                strict_err = strict_err or e
-            finally:
-                if tls_sock:
-                    tls_sock.close()
-
-        # If both connections failed, treat as unreachable.
-        if not strict_ok and not permissive_ok:
-            # (Strict handshake failure was already recorded above, if applicable.)
-            # NOTE: ssl.SSLError subclasses OSError, so check it first.
-            if isinstance(strict_err, ssl.SSLError):
-                findings.append(_finding(
-                    "TLS handshake failed (even with permissive settings)",
-                    str(strict_err),
-                    "high",
-                    "The server could not complete a TLS handshake even with legacy cipher settings. "
-                    "Verify the service is actually TLS-enabled on this port and that no middleboxes are interfering.",
-                    score_penalty=40,
-                ))
-            elif isinstance(strict_err, OSError):
-                findings.append(_finding(
-                    "Connection failed",
-                    str(strict_err),
-                    "medium",
-                    "Check that the host is reachable and port 443 is open.",
-                    score_penalty=20,
-                ))
-            return findings
+            elif sock:
+                sock.close()
 
         # ── Chain validation (separate connection WITH cert verification) ──
         findings.extend(self._check_chain_trust(host, port, timeout))
 
         # ── TLS version matrix + forward secrecy ──
-        ctx_factory = self._make_permissive_context if (not strict_ok) else self._make_strict_context
-        findings.extend(self._probe_tls_versions(host, port, timeout, context_factory=ctx_factory))
-        findings.extend(self._check_forward_secrecy(host, port, timeout, context_factory=ctx_factory))
+        findings.extend(self._probe_tls_versions(host, port, timeout))
+        findings.extend(self._check_forward_secrecy(host, port, timeout))
 
         return findings
 
@@ -447,17 +374,9 @@ class TLSScanner:
     # TLS version matrix
     # -----------------------------------------------------------------------
 
-    def _probe_tls_versions(
-        self,
-        host: str,
-        port: int,
-        timeout: int,
-        context_factory=None,
-    ) -> list[dict]:
+    def _probe_tls_versions(self, host: str, port: int, timeout: int) -> list[dict]:
         findings = []
         supported = []
-        if context_factory is None:
-            context_factory = self._make_strict_context
 
         candidates = {
             "TLSv1.0": ssl.TLSVersion.TLSv1,
@@ -468,9 +387,11 @@ class TLSScanner:
 
         for label, version in candidates.items():
             try:
-                ctx = context_factory()
+                ctx = ssl.create_default_context()
                 ctx.minimum_version = version
                 ctx.maximum_version = version
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
 
                 s = socket.create_connection((host, port), timeout=timeout)
                 ts = ctx.wrap_socket(s, server_hostname=host)
@@ -522,13 +443,7 @@ class TLSScanner:
     # Forward secrecy
     # -----------------------------------------------------------------------
 
-    def _check_forward_secrecy(
-        self,
-        host: str,
-        port: int,
-        timeout: int,
-        context_factory=None,
-    ) -> list[dict]:
+    def _check_forward_secrecy(self, host: str, port: int, timeout: int) -> list[dict]:
         """
         Test whether the server will accept a non-PFS cipher (static RSA key exchange).
         We explicitly force ECDHE/DHE ciphers on one connection and check what was
@@ -536,11 +451,11 @@ class TLSScanner:
         (which OpenSSL often refuses to do on modern systems anyway).
         """
         findings = []
-        if context_factory is None:
-            context_factory = self._make_strict_context
 
         try:
-            ctx = context_factory()
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
             # Force only ECDHE/DHE ciphers — if the server supports PFS this will succeed
             ctx.set_ciphers("ECDHE:DHE")
 
