@@ -1,9 +1,9 @@
 # test_tls.py
-from tls import TLSScanner
+from workers.scanner_modules.tls import TLSScanner
 
 scanner = TLSScanner()
 
-target = "https://self-signed.badssl.com"
+target = "https://rc4.badssl.com"
 results = scanner.scan(target, timeout=5)
 
 for finding in results:
