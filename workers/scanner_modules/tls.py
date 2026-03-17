@@ -40,6 +40,40 @@ def _finding(issue: str, evidence: str, severity: str, remediation: str = "", sc
 class TLSScanner:
     name = "tls"
 
+    def _try_legacy_tls(self, host: str, port: int, timeout: int):
+        """
+        Fallback connection allowing TLS 1.0+ — handles servers that only
+        support deprecated protocol versions. TLS 1.0/1.1 are still present
+        in OpenSSL unlike RC4 which may be compiled out entirely.
+        """
+        try:
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            # Force legacy protocol negotiation (TLS 1.0) and lower OpenSSL security level.
+            # This is needed on many OpenSSL 3.x builds where TLSv1.0/1.1 are disabled by policy.
+            ctx.minimum_version = ssl.TLSVersion.TLSv1
+            ctx.maximum_version = ssl.TLSVersion.TLSv1
+            try:
+                ctx.set_ciphers("ALL:@SECLEVEL=0")
+            except Exception:
+                pass
+            # Best-effort: clear any "no TLSv1" flags if they exist in this Python/OpenSSL build.
+            for opt_name in ("OP_NO_TLSv1", "OP_NO_TLSv1_1"):
+                opt = getattr(ssl, opt_name, None)
+                if isinstance(opt, int):
+                    ctx.options &= ~opt
+
+            sock = socket.create_connection((host, port), timeout=timeout)
+            try:
+                tls_sock = ctx.wrap_socket(sock, server_hostname=host)
+            except Exception:
+                sock.close()
+                raise
+            return True, tls_sock
+        except Exception as e:
+            return False, str(e)
+
     def scan(self, target: str, timeout: int = 10) -> list[dict]:
         findings = []
 
@@ -76,14 +110,39 @@ class TLSScanner:
             findings.extend(self._check_cipher(tls_sock))
 
         except ssl.SSLError as e:
-            findings.append(_finding(
-                "TLS handshake failed",
-                str(e),
-                "high",
-                "Ensure the server has a valid TLS certificate and supports TLS 1.2+.",
-                score_penalty=40,
-            ))
-            return findings  # No point running further checks
+            # Before giving up, try with a lower minimum TLS version.
+            # This handles servers that only support TLS 1.0 or 1.1 —
+            # which are deprecated but still present in OpenSSL (unlike RC4).
+            fallback_ok, fallback_result = self._try_legacy_tls(host, port, timeout)
+
+            if fallback_ok:
+                findings.append(_finding(
+                    "TLS handshake failed with modern settings",
+                    "Server does not support TLS 1.2 or higher -- modern clients will reject it.",
+                    "critical",
+                    "Upgrade your server to support TLS 1.2 and TLS 1.3.",
+                    score_penalty=40,
+                ))
+                findings.append(_finding(
+                    "TLS protocol negotiated (legacy)",
+                    f"Negotiated protocol: {fallback_result.version()}",
+                    "info",
+                ))
+                findings.extend(self._check_certificate(fallback_result, host))
+                findings.extend(self._check_cipher(fallback_result))
+                fallback_result.close()
+                findings.extend(self._check_chain_trust(host, port, timeout))
+                findings.extend(self._probe_tls_versions(host, port, timeout))
+                findings.extend(self._check_forward_secrecy(host, port, timeout))
+            else:
+                findings.append(_finding(
+                    "TLS handshake failed",
+                    str(e),
+                    "high",
+                    "Ensure the server has a valid TLS certificate and supports TLS 1.2+.",
+                    score_penalty=40,
+                ))
+            return findings
 
         except OSError as e:
             findings.append(_finding(
@@ -387,11 +446,28 @@ class TLSScanner:
 
         for label, version in candidates.items():
             try:
-                ctx = ssl.create_default_context()
-                ctx.minimum_version = version
-                ctx.maximum_version = version
-                ctx.check_hostname = False
-                ctx.verify_mode = ssl.CERT_NONE
+                # Use a legacy-capable context for TLS 1.0/1.1 probing on OpenSSL 3.x,
+                # otherwise create_default_context() may block these by policy.
+                if version in (ssl.TLSVersion.TLSv1, ssl.TLSVersion.TLSv1_1):
+                    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                    ctx.check_hostname = False
+                    ctx.verify_mode = ssl.CERT_NONE
+                    ctx.minimum_version = version
+                    ctx.maximum_version = version
+                    try:
+                        ctx.set_ciphers("ALL:@SECLEVEL=0")
+                    except Exception:
+                        pass
+                    for opt_name in ("OP_NO_TLSv1", "OP_NO_TLSv1_1"):
+                        opt = getattr(ssl, opt_name, None)
+                        if isinstance(opt, int):
+                            ctx.options &= ~opt
+                else:
+                    ctx = ssl.create_default_context()
+                    ctx.minimum_version = version
+                    ctx.maximum_version = version
+                    ctx.check_hostname = False
+                    ctx.verify_mode = ssl.CERT_NONE
 
                 s = socket.create_connection((host, port), timeout=timeout)
                 ts = ctx.wrap_socket(s, server_hostname=host)
