@@ -1,7 +1,8 @@
 # scanners/http_headers.py
 import requests
-from scanners.base import BaseScanner
+from workers.scanner_modules.base import BaseScanner
 
+#missing dec in some headers
 headers = [
     {
         "name": "Cache-Control",
@@ -50,7 +51,8 @@ headers = [
         "name": "Referrer-Policy",
         "value": "no-referrer",
         "severity": "medium",
-        "check_type": "exact"
+        "check_type": "one_of"
+        "allowed_values": ["no-referrer", "no-referrer-when-downgrade", "origin", "origin-when-cross-origin", "same-origin", "strict-origin", "strict-origin-when-cross-origin", "unsafe-url"]
     },
     {
         "name": "Strict-Transport-Security",
@@ -154,7 +156,12 @@ class HTTPHeadersScanner(BaseScanner):
                             "severity_hint": downgrade_severity(header["severity"])
                         })
 
-        except requests.RequestException:
-            return []
+        except requests.RequestException as e:
+            return [{
+                "module_name": self.name,
+                "issue": "Scanner error",
+                "evidence": str(e),
+                "severity_hint": "error"
+            }]
 
         return findings
