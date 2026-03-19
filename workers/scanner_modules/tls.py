@@ -2,6 +2,7 @@ from urllib.parse import urlparse
 import socket
 import ssl
 from datetime import datetime, timezone
+from .base import BaseScanner, Finding  
 
 try:
     from cryptography import x509
@@ -10,35 +11,10 @@ try:
 except ImportError:
     CRYPTO_AVAILABLE = False
 
-
-# ---------------------------------------------------------------------------
-# Finding helper — ensures every finding has a consistent shape
-# ---------------------------------------------------------------------------
-
-def _finding(issue: str, evidence: str, severity: str, remediation: str = "", score_penalty: int = 0) -> dict:
-    """
-    Canonical finding shape used across all scanner modules.
-
-    severity:     "info" | "low" | "medium" | "high" | "critical"
-    score_penalty: how many points this deducts from the site's total score (0–100 scale)
-    remediation:  human-readable fix guidance shown in the report
-    """
-    return {
-        "module_name": "tls",
-        "issue": issue,
-        "evidence": evidence,
-        "severity": severity,
-        "score_penalty": score_penalty,
-        "remediation": remediation,
-    }
-
-
-# ---------------------------------------------------------------------------
-# TLSScanner
-# ---------------------------------------------------------------------------
-
-class TLSScanner:
+class TLSScanner(BaseScanner):
     name = "tls"
+    display_name = "TLS / SSL"
+    tier = "passive"
 
     def _try_legacy_tls(self, host: str, port: int, timeout: int):
         """
@@ -74,7 +50,7 @@ class TLSScanner:
         except Exception as e:
             return False, str(e)
 
-    def scan(self, target: str, timeout: int = 10) -> list[dict]:
+    def scan(self, target: str, timeout: int = 10) -> list[Finding]:
         findings = []
 
         parsed = urlparse(target)
@@ -82,7 +58,7 @@ class TLSScanner:
         port = parsed.port or 443
 
         if not host:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "Invalid target",
                 f"Could not parse hostname from: {target}",
                 "medium",
@@ -100,7 +76,7 @@ class TLSScanner:
             sock = socket.create_connection((host, port), timeout=timeout)
             tls_sock = context.wrap_socket(sock, server_hostname=host)
 
-            findings.append(_finding(
+            findings.append(self._finding(
                 "TLS protocol negotiated",
                 f"Negotiated protocol: {tls_sock.version()}",
                 "info",
@@ -116,14 +92,14 @@ class TLSScanner:
             fallback_ok, fallback_result = self._try_legacy_tls(host, port, timeout)
 
             if fallback_ok:
-                findings.append(_finding(
+                findings.append(self._finding(
                     "TLS handshake failed with modern settings",
                     "Server does not support TLS 1.2 or higher -- modern clients will reject it.",
                     "critical",
                     "Upgrade your server to support TLS 1.2 and TLS 1.3.",
                     score_penalty=40,
                 ))
-                findings.append(_finding(
+                findings.append(self._finding(
                     "TLS protocol negotiated (legacy)",
                     f"Negotiated protocol: {fallback_result.version()}",
                     "info",
@@ -135,7 +111,7 @@ class TLSScanner:
                 findings.extend(self._probe_tls_versions(host, port, timeout))
                 findings.extend(self._check_forward_secrecy(host, port, timeout))
             else:
-                findings.append(_finding(
+                findings.append(self._finding(
                     "TLS handshake failed",
                     str(e),
                     "high",
@@ -145,7 +121,7 @@ class TLSScanner:
             return findings
 
         except OSError as e:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "Connection failed",
                 str(e),
                 "medium",
@@ -168,17 +144,15 @@ class TLSScanner:
         findings.extend(self._check_forward_secrecy(host, port, timeout))
 
         return findings
-
-    # -----------------------------------------------------------------------
+    
     # Certificate checks
-    # -----------------------------------------------------------------------
-
-    def _check_certificate(self, tls_sock: ssl.SSLSocket, host: str) -> list[dict]:
+    
+    def _check_certificate(self, tls_sock: ssl.SSLSocket, host: str) -> list[Finding]:
         findings = []
 
         cert_der = tls_sock.getpeercert(binary_form=True)
         if not cert_der:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "Certificate not available",
                 "Server did not present a certificate.",
                 "high",
@@ -188,7 +162,7 @@ class TLSScanner:
             return findings
 
         if not CRYPTO_AVAILABLE:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "Cryptography library missing",
                 "Install 'cryptography' (pip install cryptography) for full cert analysis.",
                 "low",
@@ -198,7 +172,7 @@ class TLSScanner:
         try:
             cert = x509.load_der_x509_certificate(cert_der)
         except Exception as e:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "Certificate parse error",
                 str(e),
                 "medium",
@@ -218,7 +192,7 @@ class TLSScanner:
         days_left = (exp_date - now).days
 
         if days_left < 0:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "Certificate expired",
                 f"Expired on {exp_date.date()} ({abs(days_left)} days ago)",
                 "critical",
@@ -226,7 +200,7 @@ class TLSScanner:
                 score_penalty=50,
             ))
         elif days_left < 14:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "Certificate expiring very soon",
                 f"Expires on {exp_date.date()} ({days_left} days remaining)",
                 "high",
@@ -234,7 +208,7 @@ class TLSScanner:
                 score_penalty=30,
             ))
         elif days_left < 30:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "Certificate expiring soon",
                 f"Expires on {exp_date.date()} ({days_left} days remaining)",
                 "medium",
@@ -242,7 +216,7 @@ class TLSScanner:
                 score_penalty=10,
             ))
         else:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "Certificate valid",
                 f"Expires on {exp_date.date()} ({days_left} days remaining)",
                 "info",
@@ -250,7 +224,7 @@ class TLSScanner:
 
         # ── Self-signed detection ────────────────────────────────────────────
         if cert.issuer == cert.subject:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "Self-signed certificate",
                 f"Issuer matches subject: {cert.issuer.rfc4514_string()}",
                 "high",
@@ -259,7 +233,7 @@ class TLSScanner:
                 score_penalty=35,
             ))
         else:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "Certificate issuer",
                 cert.issuer.rfc4514_string(),
                 "info",
@@ -269,7 +243,7 @@ class TLSScanner:
         try:
             sig_algo = cert.signature_hash_algorithm.name.lower()
             if sig_algo in ("sha1", "md5"):
-                findings.append(_finding(
+                findings.append(self._finding(
                     "Weak signature algorithm",
                     f"Certificate signed with {sig_algo.upper()}",
                     "high",
@@ -299,7 +273,7 @@ class TLSScanner:
                 return False
 
             if not any(matches_san(host, san) for san in san_names):
-                findings.append(_finding(
+                findings.append(self._finding(
                     "Hostname not in certificate SAN",
                     f"None of the SANs {san_names} match '{host}'",
                     "high",
@@ -308,7 +282,7 @@ class TLSScanner:
                     score_penalty=35,
                 ))
         except x509.ExtensionNotFound:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "No Subject Alternative Name extension",
                 "Certificate has no SAN extension — modern browsers reject these.",
                 "high",
@@ -316,7 +290,7 @@ class TLSScanner:
                 score_penalty=20,
             ))
         except Exception as e:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "SAN check error",
                 str(e),
                 "low",
@@ -328,7 +302,7 @@ class TLSScanner:
         if isinstance(pub, rsa.RSAPublicKey):
             key_size = pub.key_size
             if key_size < 2048:
-                findings.append(_finding(
+                findings.append(self._finding(
                     "Weak RSA key",
                     f"RSA key is {key_size} bits",
                     "high",
@@ -336,7 +310,7 @@ class TLSScanner:
                     score_penalty=30,
                 ))
             else:
-                findings.append(_finding(
+                findings.append(self._finding(
                     "RSA key strength",
                     f"RSA key is {key_size} bits",
                     "info",
@@ -345,7 +319,7 @@ class TLSScanner:
         elif isinstance(pub, ec.EllipticCurvePublicKey):
             key_size = pub.key_size
             if key_size < 256:
-                findings.append(_finding(
+                findings.append(self._finding(
                     "Weak EC key",
                     f"EC key is {key_size} bits",
                     "high",
@@ -353,7 +327,7 @@ class TLSScanner:
                     score_penalty=30,
                 ))
             else:
-                findings.append(_finding(
+                findings.append(self._finding(
                     "EC key strength",
                     f"EC key is {key_size} bits (curve: {pub.curve.name})",
                     "info",
@@ -361,11 +335,9 @@ class TLSScanner:
 
         return findings
 
-    # -----------------------------------------------------------------------
     # Chain trust validation (separate connection WITH verification)
-    # -----------------------------------------------------------------------
-
-    def _check_chain_trust(self, host: str, port: int, timeout: int) -> list[dict]:
+    
+    def _check_chain_trust(self, host: str, port: int, timeout: int) -> list[Finding]:
         findings = []
         try:
             context = ssl.create_default_context()
@@ -376,13 +348,13 @@ class TLSScanner:
             tls_sock = context.wrap_socket(sock, server_hostname=host)
             tls_sock.close()
 
-            findings.append(_finding(
+            findings.append(self._finding(
                 "Certificate chain trusted",
                 "Chain validates against system trust store.",
                 "info",
             ))
         except ssl.SSLCertVerificationError as e:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "Certificate chain validation failed",
                 str(e),
                 "high",
@@ -395,11 +367,9 @@ class TLSScanner:
 
         return findings
 
-    # -----------------------------------------------------------------------
     # Cipher suite check
-    # -----------------------------------------------------------------------
 
-    def _check_cipher(self, tls_sock: ssl.SSLSocket) -> list[dict]:
+    def _check_cipher(self, tls_sock: ssl.SSLSocket) -> list[Finding]:
         findings = []
 
         cipher = tls_sock.cipher()
@@ -408,7 +378,7 @@ class TLSScanner:
 
         cipher_name = cipher[0]
 
-        findings.append(_finding(
+        findings.append(self._finding(
             "Negotiated cipher suite",
             cipher_name,
             "info",
@@ -417,7 +387,7 @@ class TLSScanner:
         WEAK = ["RC4", "3DES", "DES", "NULL", "EXPORT", "MD5", "ANON"]
         matched = [w for w in WEAK if w in cipher_name.upper()]
         if matched:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "Weak cipher suite negotiated",
                 f"{cipher_name} uses deprecated algorithm(s): {', '.join(matched)}",
                 "high",
@@ -429,11 +399,9 @@ class TLSScanner:
 
         return findings
 
-    # -----------------------------------------------------------------------
-    # TLS version matrix
-    # -----------------------------------------------------------------------
+       # TLS version matrix
 
-    def _probe_tls_versions(self, host: str, port: int, timeout: int) -> list[dict]:
+    def _probe_tls_versions(self, host: str, port: int, timeout: int) -> list[Finding]:
         findings = []
         supported = []
 
@@ -477,7 +445,7 @@ class TLSScanner:
                 continue
 
         if not supported:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "No TLS versions detected",
                 "Could not negotiate any TLS version.",
                 "high",
@@ -486,7 +454,7 @@ class TLSScanner:
             ))
             return findings
 
-        findings.append(_finding(
+        findings.append(self._finding(
             "Supported TLS versions",
             ", ".join(supported),
             "info",
@@ -494,7 +462,7 @@ class TLSScanner:
 
         deprecated = [v for v in ("TLSv1.0", "TLSv1.1") if v in supported]
         if deprecated:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "Deprecated TLS versions supported",
                 f"Server accepts: {', '.join(deprecated)}",
                 "high",
@@ -505,7 +473,7 @@ class TLSScanner:
             ))
 
         if "TLSv1.2" not in supported and "TLSv1.3" not in supported:
-            findings.append(_finding(
+            findings.append(self._finding(
                 "TLS 1.2 and 1.3 not supported",
                 "Server does not support any modern TLS version.",
                 "critical",
@@ -515,11 +483,9 @@ class TLSScanner:
 
         return findings
 
-    # -----------------------------------------------------------------------
-    # Forward secrecy
-    # -----------------------------------------------------------------------
+   # Forward secrecy
 
-    def _check_forward_secrecy(self, host: str, port: int, timeout: int) -> list[dict]:
+    def _check_forward_secrecy(self, host: str, port: int, timeout: int) -> list[Finding]:
         """
         Test whether the server will accept a non-PFS cipher (static RSA key exchange).
         We explicitly force ECDHE/DHE ciphers on one connection and check what was
@@ -541,13 +507,13 @@ class TLSScanner:
             ts.close()
 
             if any(kex in cipher_name.upper() for kex in ("ECDHE", "DHE")):
-                findings.append(_finding(
+                findings.append(self.self._finding(
                     "Forward secrecy supported",
                     f"Server negotiated PFS cipher: {cipher_name}",
                     "info",
                 ))
             else:
-                findings.append(_finding(
+                findings.append(self.self._finding(
                     "Forward secrecy may not be supported",
                     f"Negotiated cipher does not use ECDHE/DHE: {cipher_name}",
                     "medium",
@@ -557,7 +523,7 @@ class TLSScanner:
 
         except ssl.SSLError:
             # Handshake failed with ECDHE/DHE — server likely doesn't support PFS
-            findings.append(_finding(
+            findings.append(self._finding(
                 "Forward secrecy not supported",
                 "Server rejected all ECDHE/DHE cipher suites.",
                 "medium",
