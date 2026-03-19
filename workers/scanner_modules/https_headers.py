@@ -38,6 +38,7 @@ class HTTPHeadersScanner(BaseScanner):
             "severity": "high",
             "check_type": "contains",
             "score_penalty": 25,
+            "skip_value_check": True,
             "remediation": "Add a Content-Security-Policy header. Start with 'default-src \\'self\\'' and expand as needed. See https://csp-evaluator.withgoogle.com for help.",
         },
         {
@@ -93,6 +94,7 @@ class HTTPHeadersScanner(BaseScanner):
             "value": "max-age=31536000",
             "severity": "high",
             "check_type": "contains",
+            "skip_value_check": True,
             "score_penalty": 25,
             "remediation": "Add 'Strict-Transport-Security: max-age=31536000; includeSubDomains' to enforce HTTPS.",
         },
@@ -165,28 +167,30 @@ class HTTPHeadersScanner(BaseScanner):
 
                 observed = response_headers[name] #wo header ke name k corresponsding value jo exist karte hai
 
-                if observed != header["value"].lower():
+                if check_type == "exact" and "value" in header and observed != header["value"].lower():
                     findings.append(self._finding(
                         issue=f"{header['name']} header misconfigured",
                         evidence=f"Expected '{header['value']}', got '{observed}'",
                         severity=downgrade_severity(header["severity"]),
-                        remediation=header.get("remediation", f"Set {header['name']} to '{header['value']}'."),
+                        remediation=header.get("remediation", f"Set {header['name']} to '{header.get('value', 'the recommended value')}'."),
                         score_penalty=header.get("score_penalty", 0),
                     ))
 
                 elif check_type == "contains":
-                    if header["value"].lower() not in observed:
-                        findings.append(self._finding(
-                            issue=f"{header['name']} header weak",
-                            evidence=f"Expected to contain '{header['value']}', got '{observed}'",
-                            severity=downgrade_severity(header["severity"]),
-                            remediation=header.get("remediation", f"Set {header['name']} to '{header['value']}'."),
-                            score_penalty=header.get("score_penalty", 0),
-                        ))
+                    if "value" in header and not header.get("skip_value_check", False):
+                        if header["value"].lower() not in observed:
+                            findings.append(self._finding(
+                                issue=f"{header['name']} header weak",
+                                evidence=f"Expected to contain '{header['value']}', got '{observed}'",
+                                severity=downgrade_severity(header["severity"]),
+                                remediation=header.get("remediation", f"Ensure {header['name']} contains '{header.get('value', 'the recommended value')}'."),
+                                score_penalty=header.get("score_penalty", 0),
+                            ))
 
                 elif check_type == "one_of":
                     allowed = [v.lower() for v in header["allowed_values"]]
-                    if observed not in allowed:
+                    observed_values = [v.strip() for v in observed.split(",")]
+                    if not all(v in allowed for v in observed_values):
                         findings.append(self._finding(
                             issue=f"{header['name']} header weak",
                             evidence=f"Expected one of {allowed}, got '{observed}'",
@@ -195,9 +199,9 @@ class HTTPHeadersScanner(BaseScanner):
                             score_penalty=header.get("score_penalty", 0),
                         ))
         
-        findings.extend(self._check_dangerous_headers(response_headers))
-        findings.extend(self._check_hsts(response_headers))
-        findings.extend(self._check_csp(response_headers))
+            findings.extend(self._check_dangerous_headers(response_headers))
+            findings.extend(self._check_hsts(response_headers))
+            findings.extend(self._check_csp(response_headers))
 
         except requests.RequestException as e:
             return [self._finding(
@@ -211,54 +215,54 @@ class HTTPHeadersScanner(BaseScanner):
         return findings
     
     def _check_dangerous_headers(self, response_headers: dict) -> list:
-    """
-    Check for headers that should NOT be present —
-    they leak server information and help attackers fingerprint the stack.
-    """
-    findings = []
+        """
+        Check for headers that should NOT be present —
+        they leak server information and help attackers fingerprint the stack.
+        """
+        findings = []
 
-    dangerous = [
-        {
-            "name": "server",
-            "issue": "Server header exposes software info",
-            "remediation": "Configure your server to remove or genericise the Server header. "
-                           "Nginx: 'server_tokens off;' Apache: 'ServerTokens Prod'",
-            "score_penalty": 10,
-        },
-        {
-            "name": "x-powered-by",
-            "issue": "X-Powered-By header exposes technology stack",
-            "remediation": "Remove the X-Powered-By header. "
-                           "Express.js: 'app.disable(\"x-powered-by\")' "
-                           "PHP: 'expose_php = Off' in php.ini",
-            "score_penalty": 10,
-        },
-        {
-            "name": "x-aspnet-version",
-            "issue": "X-AspNet-Version header exposes .NET version",
-            "remediation": "Remove X-AspNet-Version in Web.config: "
-                           "<httpRuntime enableVersionHeader=\"false\" />",
-            "score_penalty": 10,
-        },
-        {
-            "name": "x-aspnetmvc-version",
-            "issue": "X-AspNetMvc-Version header exposes MVC version",
-            "remediation": "Add 'MvcHandler.DisableMvcResponseHeader = true;' in Global.asax",
-            "score_penalty": 10,
-        },
-    ]
+        dangerous = [
+            {
+                "name": "server",
+                "issue": "Server header exposes software info",
+                "remediation": "Configure your server to remove or genericise the Server header. "
+                            "Nginx: 'server_tokens off;' Apache: 'ServerTokens Prod'",
+                "score_penalty": 10,
+            },
+            {
+                "name": "x-powered-by",
+                "issue": "X-Powered-By header exposes technology stack",
+                "remediation": "Remove the X-Powered-By header. "
+                            "Express.js: 'app.disable(\"x-powered-by\")' "
+                            "PHP: 'expose_php = Off' in php.ini",
+                "score_penalty": 10,
+            },
+            {
+                "name": "x-aspnet-version",
+                "issue": "X-AspNet-Version header exposes .NET version",
+                "remediation": "Remove X-AspNet-Version in Web.config: "
+                            "<httpRuntime enableVersionHeader=\"false\" />",
+                "score_penalty": 10,
+            },
+            {
+                "name": "x-aspnetmvc-version",
+                "issue": "X-AspNetMvc-Version header exposes MVC version",
+                "remediation": "Add 'MvcHandler.DisableMvcResponseHeader = true;' in Global.asax",
+                "score_penalty": 10,
+            },
+        ]
 
-    for header in dangerous:
-        if header["name"] in response_headers:
-            findings.append(self._finding(
-                issue=header["issue"],
-                evidence=f"Header present with value: '{response_headers[header['name']]}'",
-                severity="medium",
-                remediation=header["remediation"],
-                score_penalty=header["score_penalty"],
-            ))
+        for header in dangerous:
+            if header["name"] in response_headers:
+                findings.append(self._finding(
+                    issue=header["issue"],
+                    evidence=f"Header present with value: '{response_headers[header['name']]}'",
+                    severity="medium",
+                    remediation=header["remediation"],
+                    score_penalty=header["score_penalty"],
+                ))
 
-    return findings
+        return findings
 
 
     def _check_hsts(self, response_headers: dict) -> list:
@@ -336,7 +340,6 @@ class HTTPHeadersScanner(BaseScanner):
             {
                 "value": "unsafe-inline",
                 "issue": "CSP allows unsafe-inline scripts",
-                "evidence": f"CSP contains 'unsafe-inline': '{csp}'",
                 "remediation": "Remove 'unsafe-inline' from CSP and use nonces or hashes instead. "
                             "See https://csp-evaluator.withgoogle.com",
                 "score_penalty": 20,
@@ -344,7 +347,6 @@ class HTTPHeadersScanner(BaseScanner):
             {
                 "value": "unsafe-eval",
                 "issue": "CSP allows unsafe-eval",
-                "evidence": f"CSP contains 'unsafe-eval': '{csp}'",
                 "remediation": "Remove 'unsafe-eval' from CSP. Refactor code that uses eval(), "
                             "setTimeout(string), or similar patterns.",
                 "score_penalty": 20,
@@ -352,7 +354,6 @@ class HTTPHeadersScanner(BaseScanner):
             {
                 "value": "default-src *",
                 "issue": "CSP uses wildcard default-src",
-                "evidence": f"CSP contains 'default-src *': '{csp}'",
                 "remediation": "Replace 'default-src *' with explicit trusted sources. "
                             "A wildcard CSP provides no protection.",
                 "score_penalty": 25,
@@ -361,9 +362,13 @@ class HTTPHeadersScanner(BaseScanner):
 
         for item in dangerous_values:
             if item["value"] in csp.lower():
+                offending_directive = next(
+                    (d.strip() for d in csp.split(";") if item["value"] in d.lower()),
+                    "unknown directive"
+                )
                 findings.append(self._finding(
                     issue=item["issue"],
-                    evidence=item["evidence"],
+                    evidence=f"Found in directive: '{offending_directive}'",
                     severity="high",
                     remediation=item["remediation"],
                     score_penalty=item["score_penalty"],
