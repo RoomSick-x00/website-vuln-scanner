@@ -1,39 +1,29 @@
-# workers/scanner_modules/base.py
-
+from typing import TypedDict, Literal
 from abc import ABC, abstractmethod
-from typing import List, Dict
 
+SeverityLevel = Literal["info", "low", "medium", "high", "critical"]
 
+class Finding(TypedDict):
+    module_name: str
+    issue: str
+    evidence: str
+    severity: SeverityLevel
+    score_penalty: int
+    remediation: str
+    
 class BaseScanner(ABC):
-    """
-    Abstract base class for all vulnerability scanner modules.
-
-    Used for:
-    - Enforcing interface
-    - Auto-discovery via subclass detection
-    """
-
-    module_name: str = ""
-
-    def __init__(self) -> None:
-        if not self.module_name:
-            raise ValueError(
-                f"{self.__class__.__name__} must define a non-empty module_name"
-            )
-
+    name: str = ""
+    display_name: str = ""
+    tier: Literal["passive", "active", "intrusive"] = "passive"
+    
     @abstractmethod
-    def scan(self, target: str, timeout: int) -> List[Dict]:
+    def scan(self, target: str, timeout: int = 10) -> list[Finding]:
         """
-        Execute scan against target.
+        Run the scanner against the target URL.
 
-        Returns:
-            List of standardized findings.
-        """
-        raise NotImplementedError
+        Every subclass MUST implement this method.
 
-    @classmethod
-    def is_valid_scanner(cls) -> bool:
+        target:  fully qualified URL e.g. "https://example.com"
+        timeout: seconds before giving up on a network operation
+        returns: list of Finding dicts
         """
-        Utility method for discovery filtering.
-        """
-        return cls is not BaseScanner
