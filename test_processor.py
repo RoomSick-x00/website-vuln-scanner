@@ -2,7 +2,7 @@ from workers.processor import run_scan
 
 # Test TLS scanner
 print("\n--- TLS SCAN ---")
-result = run_scan("https://example.com", "tls", 10)
+result = run_scan.run(1, "tls", "https://example.com")
 print(f"Status: {result['status']}")
 print(f"Findings: {len(result['findings'])}")
 for f in result['findings']:
@@ -10,7 +10,7 @@ for f in result['findings']:
 
 # Test HTTP Headers scanner
 print("\n--- HTTP HEADERS SCAN ---")
-result = run_scan("https://example.com", "http_headers", 10)
+result = run_scan.run(2, "http_headers", "https://example.com")
 print(f"Status: {result['status']}")
 print(f"Findings: {len(result['findings'])}")
 for f in result['findings']:
@@ -18,6 +18,6 @@ for f in result['findings']:
 
 # Test unknown task_type
 print("\n--- UNKNOWN TASK TYPE ---")
-result = run_scan("https://example.com", "unknown", 10)
+result = run_scan.run(3, "unknown", "https://example.com")
 print(f"Status: {result['status']}")
 print(f"Error: {result['error']}")

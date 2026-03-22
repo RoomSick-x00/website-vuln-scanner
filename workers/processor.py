@@ -1,6 +1,7 @@
 from workers.scanner_modules.tls import TLSScanner
 from workers.scanner_modules.https_headers import HTTPHeadersScanner
 from tasks.celery_app import app
+from datetime import datetime, timezone
 
 # way to map a task_type string to the right scanner class.
 SCANNER_REGISTRY = {
@@ -19,9 +20,11 @@ def run_scan(self, scan_id:int, task_type:str, target_url:str):
             "status": "failed",
             "error": f"No scanner registered for task_type: '{task_type}'",
             "findings": [],
+            "started_at": started_at,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
         }
     try:
-        raw_findings = scanner.safe_scan(target_url)
+        raw_findings = scanner.safe_scan(target_url, timeout = 30)
     except Exception as e:
         # Temporary failure — retry with exponential backoff
         # 1st retry after 10s, 2nd after 20s, 3rd after 40s
@@ -34,10 +37,12 @@ def run_scan(self, scan_id:int, task_type:str, target_url:str):
                 "status": "failed",
                 "error": f"Scanner failed after 3 retries: {str(e)}",
                 "findings": [],
+                "started_at": started_at,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
             }
     
     enriched_findings = [
-        {**finding, "scan_id": scan_id, "task_type": task_type}
+        {**finding, "scan_id": scan_id, "task_type": task_type}  #"issue_type": _derive_issue_type(finding)
         for finding in raw_findings
     ]
     
@@ -46,4 +51,6 @@ def run_scan(self, scan_id:int, task_type:str, target_url:str):
         "task_type": task_type,
         "status": "completed",
         "findings": enriched_findings,
+        "started_at": started_at,
+        "finished_at": datetime.now(timezone.utc).isoformat(),
     }
