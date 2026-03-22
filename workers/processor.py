@@ -37,7 +37,7 @@ def run_scan(self, scan_id:int, task_type:str, target_url:str):
             }
     
     enriched_findings = [
-        {**finding, "scan_id": sccan_id, "task_type": task_type}
+        {**finding, "scan_id": scan_id, "task_type": task_type}
         for finding in raw_findings
     ]
     
