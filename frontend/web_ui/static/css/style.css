@@ -1,0 +1,147 @@
+/* ===== RESET ===== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+/* ===== BODY ===== */
+body {
+    background: linear-gradient(135deg, #020617, #0f172a);
+    color: #e5e7eb;
+}
+
+/* ===== NAVBAR ===== */
+.navbar {
+    padding: 18px 40px;
+    font-size: 22px;
+    font-weight: 600;
+    color: #38bdf8;
+    border-bottom: 1px solid #1e293b;
+}
+
+/* ===== CENTER ===== */
+.container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 90vh;
+}
+
+/* ===== CARD ===== */
+.card {
+    width: 450px;
+    background: #020617;
+    padding: 30px;
+    border-radius: 12px;
+    border: 1px solid #1e293b;
+    box-shadow: 0 15px 30px rgba(0,0,0,0.6);
+}
+
+/* ===== TITLE ===== */
+.card h2 {
+    text-align: center;
+    margin-bottom: 25px;
+}
+
+/* ===== INPUT ===== */
+input {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: #0f172a;
+    color: white;
+    margin-bottom: 15px;
+}
+
+/* ===== BUTTON ===== */
+button {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    border: none;
+    background: #2563eb;
+    color: white;
+    cursor: pointer;
+    font-size: 15px;
+}
+
+button:hover {
+    background: #1d4ed8;
+}
+
+/* ===== SPINNER ===== */
+.spinner {
+    margin: 20px auto;
+    width: 35px;
+    height: 35px;
+    border: 4px solid #1e293b;
+    border-top: 4px solid #38bdf8;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    100% { transform: rotate(360deg); }
+}
+
+/* ===== RESULTS ===== */
+.results {
+    margin-top: 20px;
+}
+
+/* ===== EACH RESULT ROW ===== */
+.result-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    border-radius: 8px;
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    margin-bottom: 12px;
+}
+
+/* ===== LABEL ===== */
+.result-item span:first-child {
+    font-weight: 500;
+}
+
+/* ===== BADGES ===== */
+.badge {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+/* ===== COLORS ===== */
+.safe {
+    color: #22c55e;
+}
+
+.vulnerable {
+    color: #ef4444;
+}
+
+.medium {
+    color: #facc15;
+}
+
+/* ===== BUTTON LINK ===== */
+a.button-link {
+    display: block;
+    text-align: center;
+    margin-top: 20px;
+    padding: 10px;
+    border-radius: 8px;
+    background: #1e293b;
+    text-decoration: none;
+    color: white;
+}
+
+a.button-link:hover {
+    background: #334155;
+}
