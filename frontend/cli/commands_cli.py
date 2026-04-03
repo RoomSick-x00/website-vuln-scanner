@@ -1,4 +1,4 @@
-import api
+from . import api
 
 def submit_scan(url):
     return api.submit_scan(url)
