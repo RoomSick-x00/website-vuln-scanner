@@ -47,8 +47,8 @@ def get_scan(scan_id: str):
 
 @router.get("/", response_model=list[ScanResponse])
 def get_scans(db: Session = Depends(get_db)):
-    scans = db.query(Scan).all()
-    return scans
+   scans = db.query(Scan).order_by(Scan.created_at.desc()).all()
+   return scans
 
 from fastapi import HTTPException
 
