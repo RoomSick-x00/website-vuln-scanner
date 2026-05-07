@@ -2,8 +2,8 @@ from celery import Celery
 
 app = Celery(
     "website_vuln_scanner",
-    broker="redis://localhost:6380/0",
-    backend="redis://localhost:6380/0",
+    broker="redis://localhost:6379/0",
+    backend="redis://localhost:6379/0",
     include=["tasks.scan_tasks", "workers.processor"],
 )
 
