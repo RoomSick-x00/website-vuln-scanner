@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from uuid import uuid4
 from datetime import datetime
+from workers.processor import run_scan
 from backend.app.schemas.scan import ScanCreate, ScanResponse
 from backend.app.core.enums import ScanStatus
 
@@ -26,7 +27,7 @@ def create_scan(scan: ScanCreate, db: Session = Depends(get_db)):
     db.add(new_scan)
     db.commit()
     db.refresh(new_scan)
-
+    run_scan.delay(str(new_scan.id))
     return new_scan
 
 

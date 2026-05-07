@@ -1,0 +1,43 @@
+services:
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+
+    container_name: backend
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - ./:/code
+
+    depends_on:
+      - redis
+      - postgres
+
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/vulndb
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      PYTHONPATH: /code
+
+  redis:
+    image: redis
+    container_name: redis-server
+
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres
+    container_name: postgres-db
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vulndb
+
+    ports:
+      - "5432:5432"

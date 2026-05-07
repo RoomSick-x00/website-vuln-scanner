@@ -1,7 +1,5 @@
-from backend.app.database import engine, Base
-
-# Import models so SQLAlchemy can detect them
-from backend.app.models.scan import Scan
+from app.database import Base, engine
+from app.models.scan import Scan
 
 print("Creating tables...")
 
