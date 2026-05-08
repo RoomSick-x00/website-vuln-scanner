@@ -1,20 +1,20 @@
 import argparse
-import commands
-import formatter
+import frontend.cli.commands_cli as commands_cli
+from . import formatter
 
 def handle_submit(args):
-    response = commands.submit_scan(args.url)
+    response = commands_cli.submit_scan(args.url)
     formatter.format_submit_response(response)
 
 
 
 def handle_status(args):
-    response = commands.check_status(args.id)
+    response = commands_cli.check_status(args.id)
     formatter.format_status_response(response)
 
 
 def handle_results(args):
-    response = commands.get_results(args.id)
+    response = commands_cli.get_results(args.id)
     formatter.format_results_response(response)
 
 
