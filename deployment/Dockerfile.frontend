@@ -1,10 +1,15 @@
-FROM python:3.11
+FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY . .
+# Copy only frontend folder + its requirements
+COPY frontend/requirements.txt .
 
-RUN pip install flask requests
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy only what's needed
+COPY frontend /app/frontend
 
 WORKDIR /app/frontend/web_ui
 
