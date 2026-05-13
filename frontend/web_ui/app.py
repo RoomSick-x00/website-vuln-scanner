@@ -29,17 +29,22 @@ def api_status(scan_id):
     return data
 
 
+
 @app.route("/submit", methods=["POST"])
 def submit_scan():
+
     url = request.form["url"]
 
-    response = commands.submit_scan(url)
-    scan_id = response["id"]
+    result = commands.submit_scan(url)
+
+    if "error" in result:
+        return result["error"]
+
+    scan_id = result["scan_id"]
 
     return render_template(
         "status.html",
-        scan_id=scan_id,
-        status=response["status"]
+        scan_id=scan_id
     )
 
 
@@ -64,4 +69,4 @@ def results(scan_id):
     )
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
