@@ -1,11 +1,13 @@
 from workers.scanner_modules.tls import TLSScanner
 from workers.scanner_modules.https_headers import HTTPHeadersScanner
+from workers.scanner_modules.xss import XSSScanner
 from tasks.celery_app import app
 from datetime import datetime, timezone
 
 SCANNER_REGISTRY = {
     "tls": TLSScanner(),
     "http_headers": HTTPHeadersScanner(),
+    "xss": XSSScanner(),
 }
 
 
