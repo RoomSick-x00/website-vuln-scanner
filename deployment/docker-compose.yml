@@ -1,27 +1,87 @@
+version: "3.9"
+
 services:
 
-  frontend:
-    build:
-      context: ..
-      dockerfile: deployment/Dockerfile.frontend
+  db:
+    image: postgres:15
+    container_name: vuln_scanner_db
+    env_file:
+      - ../.env
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: aarsh
+      POSTGRES_DB: scanner_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5000:5000"
-    container_name: vuln_scanner_frontend
+      - "5432:5432"
+    networks:
+      - app-network
 
   backend:
     build:
       context: ..
-      dockerfile: deployment/Dockerfile.backend
+      dockerfile: deployment/DockerFile.backend
+    container_name: vuln_scanner_backend
+    env_file:
+      - ../.env
+    environment:
+      DATABASE_URL: postgresql://postgres:aarsh@db:5432/scanner_db
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: secret123
+      DEBUG: "True"
     ports:
       - "8000:8000"
-    container_name: vuln_scanner_backend
+    depends_on:
+      - db
+      - redis
+    networks:
+      - app-network
 
   redis:
     image: redis:7
     container_name: vuln_scanner_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
 
   worker:
     build:
       context: ..
       dockerfile: deployment/Dockerfile.worker
     container_name: vuln_scanner_worker
+    env_file:
+      - ../.env
+    environment:
+      DATABASE_URL: postgresql://postgres:aarsh@db:5432/scanner_db
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      - redis
+      - db
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.frontend
+    container_name: vuln_scanner_frontend
+    env_file:
+      - ../.env
+    environment:
+      API_URL: http://backend:8000
+    ports:
+      - "5000:5000"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
