@@ -2,7 +2,7 @@ import requests
 
 BASE_URL = "http://backend:8000"
 
-from . import api
+import api
 
 
 def submit_scan(url):
