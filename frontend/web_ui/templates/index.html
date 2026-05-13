@@ -1,24 +1,59 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Scanner</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vulnerability Scanner</title>
+
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
 
-<div class="navbar">🔍 Vulnerability Scanner</div>
+    <div class="background"></div>
 
-<div class="container">
-    <div class="card">
-        <h2>Start Scan</h2>
+    <nav class="navbar">
+        <div class="logo">
+            🔍 Vulnerability Scanner
+        </div>
+    </nav>
 
-        <form method="POST" action="/submit">
-            <input type="text" name="url" placeholder="Enter website URL" required>
-            <button type="submit">Start Scan</button>
-        </form>
+    <div class="container">
+
+        <div class="card">
+
+            <div class="icon">
+                🛡️
+            </div>
+
+            <h1>Website Vulnerability Scanner</h1>
+
+            <p class="subtitle">
+                Scan websites for vulnerabilities and monitor security reports instantly.
+            </p>
+
+            <form action="/submit" method="POST">
+
+                <div class="input-group">
+                    <input
+                        type="text"
+                        name="url"
+                        placeholder="https://example.com"
+                        required
+                    >
+                </div>
+
+                <button type="submit">
+                    Start Security Scan
+                </button>
+
+            </form>
+
+        </div>
 
     </div>
-</div>
 
 </body>
 </html>
