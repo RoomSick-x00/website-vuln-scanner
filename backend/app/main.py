@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from backend.app.routers import scan
+from app.routers import scan
 
 app = FastAPI(title="Vulnerability Scanner API")
 
