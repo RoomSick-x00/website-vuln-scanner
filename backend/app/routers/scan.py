@@ -1,13 +1,13 @@
 from fastapi import APIRouter
 from uuid import uuid4
 from datetime import datetime
-from backend.app.schemas.scan import ScanCreate, ScanResponse
-from backend.app.core.enums import ScanStatus
+from app.schemas.scan import ScanCreate, ScanResponse
+from app.core.enums import ScanStatus
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
-from backend.app.database import get_db
-from backend.app.models.scan import Scan
+from app.database import get_db
+from app.models.scan import Scan
 
 router = APIRouter(prefix="/scans", tags=["Scans"])
 

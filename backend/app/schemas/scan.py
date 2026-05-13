@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
-from backend.app.core.enums import ScanStatus
+from app.core.enums import ScanStatus
 
 class ScanCreate(BaseModel):
     target: str
