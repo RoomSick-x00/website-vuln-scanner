@@ -15,3 +15,5 @@ requests
 pytest-mock
 pytest-cov
 pytest-asyncio
+celery
+redis
