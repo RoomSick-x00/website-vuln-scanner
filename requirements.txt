@@ -17,3 +17,8 @@ pytest-cov
 pytest-asyncio
 celery
 redis
+sqlalchemy
+psycopg2-binary
+pydantic
+python-dotenv
+requests
