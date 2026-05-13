@@ -1,0 +1,17 @@
+uvicorn
+fastapi
+httpx
+beautifulsoup4  
+lxml
+pytest
+pytest-asyncio
+pytest-cov
+coverage
+flake8
+mypy
+black
+isort
+requests
+pytest-mock
+pytest-cov
+pytest-asyncio
