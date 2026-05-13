@@ -7,17 +7,14 @@ from reportlab.platypus import (
 from reportlab.lib.styles import getSampleStyleSheet
 
 
-def create_pdf():
+def create_pdf(scan_data):
 
-    # Create PDF file
     pdf = SimpleDocTemplate(
         "scan_report.pdf"
     )
 
-    # Default styles
     styles = getSampleStyleSheet()
 
-    # Content list
     elements = []
 
     # --------------------------------
@@ -38,12 +35,12 @@ def create_pdf():
     # --------------------------------
 
     website = Paragraph(
-        "<b>Target URL:</b> https://example.com",
+        f"<b>Target URL:</b> {scan_data['url']}",
         styles['BodyText']
     )
 
     scan_date = Paragraph(
-        "<b>Scan Date:</b> 13 May 2026",
+        f"<b>Scan Date:</b> {scan_data['date']}",
         styles['BodyText']
     )
 
@@ -54,72 +51,40 @@ def create_pdf():
     elements.append(Spacer(1, 20))
 
     # --------------------------------
-    # Vulnerability 1
+    # Vulnerabilities
     # --------------------------------
 
-    vuln1 = Paragraph(
-        "<b>Vulnerability:</b> SQL Injection",
-        styles['Heading2']
-    )
+    for vuln in scan_data['vulnerabilities']:
 
-    severity1 = Paragraph(
-        "<b>Severity:</b> High",
-        styles['BodyText']
-    )
+        vuln_name = Paragraph(
+            f"<b>Vulnerability:</b> {vuln['name']}",
+            styles['Heading2']
+        )
 
-    description1 = Paragraph(
-        "<b>Description:</b> User input is not sanitized properly.",
-        styles['BodyText']
-    )
+        severity = Paragraph(
+            f"<b>Severity:</b> {vuln['severity']}",
+            styles['BodyText']
+        )
 
-    solution1 = Paragraph(
-        "<b>Solution:</b> Use parameterized queries.",
-        styles['BodyText']
-    )
+        description = Paragraph(
+            f"<b>Description:</b> {vuln['description']}",
+            styles['BodyText']
+        )
 
-    elements.append(vuln1)
+        solution = Paragraph(
+            f"<b>Solution:</b> {vuln['solution']}",
+            styles['BodyText']
+        )
 
-    elements.append(severity1)
+        elements.append(vuln_name)
 
-    elements.append(description1)
+        elements.append(severity)
 
-    elements.append(solution1)
+        elements.append(description)
 
-    elements.append(Spacer(1, 20))
+        elements.append(solution)
 
-    # --------------------------------
-    # Vulnerability 2
-    # --------------------------------
-
-    vuln2 = Paragraph(
-        "<b>Vulnerability:</b> Cross Site Scripting (XSS)",
-        styles['Heading2']
-    )
-
-    severity2 = Paragraph(
-        "<b>Severity:</b> Medium",
-        styles['BodyText']
-    )
-
-    description2 = Paragraph(
-        "<b>Description:</b> Malicious scripts can be injected.",
-        styles['BodyText']
-    )
-
-    solution2 = Paragraph(
-        "<b>Solution:</b> Validate and sanitize inputs.",
-        styles['BodyText']
-    )
-
-    elements.append(vuln2)
-
-    elements.append(severity2)
-
-    elements.append(description2)
-
-    elements.append(solution2)
-
-    elements.append(Spacer(1, 20))
+        elements.append(Spacer(1, 20))
 
     # --------------------------------
     # Footer
@@ -132,11 +97,29 @@ def create_pdf():
 
     elements.append(footer)
 
-    # Create PDF
     pdf.build(elements)
 
     print("PDF report generated successfully!")
+    return "scan_report.pdf"
+    sample_data = {
+    "url": "https://example.com",
 
+    "date": "13 May 2026",
 
-# Run Function
-create_pdf()
+    "vulnerabilities": [
+
+        {
+            "name": "SQL Injection",
+            "severity": "High",
+            "description": "User input not sanitized.",
+            "solution": "Use parameterized queries."
+        },
+
+        {
+            "name": "Cross Site Scripting",
+            "severity": "Medium",
+            "description": "Scripts can be injected.",
+            "solution": "Validate user inputs."
+        }
+    ]
+}
