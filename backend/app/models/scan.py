@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, DateTime
 from sqlalchemy.sql import func
-from backend.app.database import Base
-from backend.app.core.enums import ScanStatus
+from app.database import Base
+from app.core.enums import ScanStatus
 
 class Scan(Base):
     __tablename__ = "scans"
