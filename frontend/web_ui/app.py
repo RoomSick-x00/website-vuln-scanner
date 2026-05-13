@@ -12,7 +12,11 @@ app = Flask(
 
 # fix cli import
 sys.path.append(os.path.abspath(os.path.join(BASE_DIR, "..", "cli")))
-import commands_cli as commands
+
+
+
+import commands_cli as commands 
+
 
 @app.route("/debug-static")
 def debug_static():

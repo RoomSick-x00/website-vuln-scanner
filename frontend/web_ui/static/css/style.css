@@ -1,237 +1,141 @@
-body {
-    font-family: 'Segoe UI', sans-serif;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    margin: 0;
-    padding: 0;
-    color: #333;
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Poppins',sans-serif;
 }
 
-/* Center card */
-.container {
-    width: 420px;
-    margin: 100px auto;
-    text-align: center;
-    background: white;
-    padding: 35px;
-    border-radius: 15px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+body{
+    height:100vh;
+    overflow:hidden;
+    background:#0f172a;
+    position:relative;
 }
 
-/* Title */
-h1 {
-    margin-bottom: 20px;
-    color: #444;
+.background{
+    position:absolute;
+    width:100%;
+    height:100%;
+    background:
+        radial-gradient(circle at top left,#4f46e5,transparent 35%),
+        radial-gradient(circle at bottom right,#9333ea,transparent 35%),
+        linear-gradient(135deg,#0f172a,#111827);
+    z-index:-1;
 }
 
-/* Input */
-input {
-    width: 100%;
-    padding: 14px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    outline: none;
-    font-size: 15px;
-    margin-top: 10px;
+.navbar{
+    width:100%;
+    padding:20px 40px;
+    color:white;
+    font-size:24px;
+    font-weight:600;
 }
 
-input:focus {
-    border-color: #667eea;
+.container{
+    width:100%;
+    height:85vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
 }
 
-/* Button */
-button, .btn {
-    width: 100%;
-    margin-top: 20px;
-    padding: 14px;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 16px;
-    text-decoration: none;
-    display: inline-block;
+.card{
+    width:500px;
+    padding:50px;
+    border-radius:25px;
+
+    background:rgba(255,255,255,0.08);
+
+    backdrop-filter:blur(18px);
+
+    border:1px solid rgba(255,255,255,0.15);
+
+    box-shadow:
+        0 8px 32px rgba(0,0,0,0.35);
+
+    text-align:center;
+
+    color:white;
 }
 
-button:hover, .btn:hover {
-    opacity: 0.9;
+.icon{
+    font-size:60px;
+    margin-bottom:20px;
 }
 
-/* Result box */
-.result-box {
-    margin-top: 20px;
-    padding: 15px;
-    background: #f1f5ff;
-    border-left: 5px solid #667eea;
-    border-radius: 8px;
-    text-align: left;
+.card h1{
+    font-size:34px;
+    margin-bottom:15px;
 }
 
-/* Spinner */
-.spinner {
-    margin: 25px auto;
-    border: 5px solid #eee;
-    border-top: 5px solid #667eea;
-    border-radius: 50%;
-    width: 45px;
-    height: 45px;
-    animation: spin 1s linear infinite;
+.subtitle{
+    color:#d1d5db;
+    font-size:15px;
+    line-height:1.6;
+    margin-bottom:35px;
 }
 
-/* Status badge */
-.status {
-    margin-top: 15px;
-    font-weight: bold;
-    color: #667eea;
+.input-group{
+    margin-bottom:25px;
 }
 
-/* Animation */
-@keyframes spin {
-    100% { transform: rotate(360deg); }
-/* ===== RESET ===== */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: 'Segoe UI', sans-serif;
+.input-group input{
+    width:100%;
+    padding:18px;
+    border:none;
+    outline:none;
+
+    border-radius:14px;
+
+    background:rgba(255,255,255,0.12);
+
+    color:white;
+
+    font-size:16px;
+
+    border:1px solid rgba(255,255,255,0.12);
+
+    transition:0.3s;
 }
 
-/* ===== BODY ===== */
-body {
-    background: linear-gradient(135deg, #020617, #0f172a);
-    color: #e5e7eb;
+.input-group input::placeholder{
+    color:#d1d5db;
 }
 
-/* ===== NAVBAR ===== */
-.navbar {
-    padding: 18px 40px;
-    font-size: 22px;
-    font-weight: 600;
-    color: #38bdf8;
-    border-bottom: 1px solid #1e293b;
+.input-group input:focus{
+    border-color:#8b5cf6;
+    transform:scale(1.02);
 }
 
-/* ===== CENTER ===== */
-.container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 90vh;
+button{
+    width:100%;
+    padding:18px;
+
+    border:none;
+    border-radius:14px;
+
+    background:linear-gradient(
+        135deg,
+        #6366f1,
+        #8b5cf6
+    );
+
+    color:white;
+
+    font-size:17px;
+    font-weight:600;
+
+    cursor:pointer;
+
+    transition:0.3s;
 }
 
-/* ===== CARD ===== */
-.card {
-    width: 450px;
-    background: #020617;
-    padding: 30px;
-    border-radius: 12px;
-    border: 1px solid #1e293b;
-    box-shadow: 0 15px 30px rgba(0,0,0,0.6);
+button:hover{
+    transform:translateY(-2px);
+    box-shadow:
+        0 10px 20px rgba(139,92,246,0.35);
 }
 
-/* ===== TITLE ===== */
-.card h2 {
-    text-align: center;
-    margin-bottom: 25px;
-}
-
-/* ===== INPUT ===== */
-input {
-    width: 100%;
-    padding: 12px;
-    border-radius: 8px;
-    border: 1px solid #334155;
-    background: #0f172a;
-    color: white;
-    margin-bottom: 15px;
-}
-
-/* ===== BUTTON ===== */
-button {
-    width: 100%;
-    padding: 12px;
-    border-radius: 8px;
-    border: none;
-    background: #2563eb;
-    color: white;
-    cursor: pointer;
-    font-size: 15px;
-}
-
-button:hover {
-    background: #1d4ed8;
-}
-
-/* ===== SPINNER ===== */
-.spinner {
-    margin: 20px auto;
-    width: 35px;
-    height: 35px;
-    border: 4px solid #1e293b;
-    border-top: 4px solid #38bdf8;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    100% { transform: rotate(360deg); }
-}
-
-/* ===== RESULTS ===== */
-.results {
-    margin-top: 20px;
-}
-
-/* ===== EACH RESULT ROW ===== */
-.result-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px;
-    border-radius: 8px;
-    background: #0f172a;
-    border: 1px solid #1e293b;
-    margin-bottom: 12px;
-}
-
-/* ===== LABEL ===== */
-.result-item span:first-child {
-    font-weight: 500;
-}
-
-/* ===== BADGES ===== */
-.badge {
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: bold;
-}
-
-/* ===== COLORS ===== */
-.safe {
-    color: #22c55e;
-}
-
-.vulnerable {
-    color: #ef4444;
-}
-
-.medium {
-    color: #facc15;
-}
-
-/* ===== BUTTON LINK ===== */
-a.button-link {
-    display: block;
-    text-align: center;
-    margin-top: 20px;
-    padding: 10px;
-    border-radius: 8px;
-    background: #1e293b;
-    text-decoration: none;
-    color: white;
-}
-
-a.button-link:hover {
-    background: #334155;
+button:active{
+    transform:scale(0.98);
 }
