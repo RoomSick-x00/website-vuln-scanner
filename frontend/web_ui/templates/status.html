@@ -1,43 +1,106 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Status</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scan Status</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='css/style.css') }}">
 </head>
+
 <body>
 
-<div class="navbar">🔍 Vulnerability Scanner</div>
+<div class="background"></div>
+
+<nav class="navbar">
+    🔍 Vulnerability Scanner
+</nav>
 
 <div class="container">
+
     <div class="card">
-        <h2>Scanning...</h2>
 
-        <div class="spinner"></div>
+        <h1 id="status-title">
+            Scanning...
+        </h1>
 
-        <p id="status-text">Checking status...</p>
-        <p>Scan ID: {{ scan_id }}</p>
+        <p id="status-text">
+            Checking scan status...
+        </p>
+
+        <p class="scan-id">
+            <strong>Scan ID:</strong>
+            {{ scan_id }}
+        </p>
+
+        <div class="loader"></div>
+
     </div>
+
 </div>
 
 <script>
+
 const scanId = "{{ scan_id }}";
 
-// Call backend every 2 seconds
-setInterval(async () => {
+async function checkStatus() {
+
     try {
-        const res = await fetch(`/api/status/${scanId}`);
-        const data = await res.json();
 
-        document.getElementById("status-text").innerText = data.status;
+        const response = await fetch(`/api/status/${scanId}`);
 
-        if (data.status === "COMPLETED") {
-            window.location.href = `/results/${scanId}`;
+        const data = await response.json();
+
+        console.log(data);
+
+        const statusText = document.getElementById("status-text");
+
+        if (data.status === "QUEUED") {
+
+            statusText.innerText = "Waiting in queue...";
+
         }
 
-    } catch (err) {
-        console.error(err);
+        else if (data.status === "RUNNING") {
+
+            statusText.innerText = "Scanning target website...";
+
+        }
+
+        else if (data.status === "COMPLETED") {
+
+            statusText.innerText = "Scan completed!";
+
+            setTimeout(() => {
+                window.location.href = `/results/${scanId}`;
+            }, 1500);
+
+        }
+
+        else {
+
+            statusText.innerText = `Status: ${data.status}`;
+
+        }
+
     }
-}, 2000);
+
+    catch (error) {
+
+        console.error(error);
+
+        document.getElementById("status-text").innerText =
+            "Error checking scan status";
+
+    }
+
+}
+
+setInterval(checkStatus, 3000);
+
+checkStatus();
+
 </script>
 
 </body>
