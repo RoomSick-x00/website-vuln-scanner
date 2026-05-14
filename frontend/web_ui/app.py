@@ -44,13 +44,15 @@ def submit_scan():
     if "error" in result:
         return result["error"]
 
-    scan_id = result["scan_id"]
+    if "id" not in result:
+        return f"Backend response: {result}"
+
+    scan_id = result["id"]
 
     return render_template(
         "status.html",
         scan_id=scan_id
     )
-
 
 @app.route("/status/<scan_id>")
 def status(scan_id):
