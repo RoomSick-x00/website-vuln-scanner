@@ -2,6 +2,7 @@ import dns.resolver
 import dns.dnssec
 import dns.name
 import dns.query
+import re
 import dns.zone
 from urllib.parse import urlparse
 
@@ -163,13 +164,16 @@ class DNSScanner(BaseScanner):
             ))
 
             # Check policy strength
-            if "p=reject" in dmarc:
+            policy_match = re.search(r'(?<![a-z])p=(\w+)', dmarc)
+            policy = policy_match.group(1).lower() if policy_match else None
+
+            if policy == "reject":
                 findings.append(self._finding(
                     issue="DMARC policy is strict",
                     evidence=f"p=reject blocks unauthorized emails outright: {dmarc}",
                     severity="info",
                 ))
-            elif "p=quarantine" in dmarc:
+            elif policy == "quarantine":
                 findings.append(self._finding(
                     issue="DMARC policy is moderate",
                     evidence=f"p=quarantine sends unauthorized emails to spam: {dmarc}",
@@ -177,7 +181,7 @@ class DNSScanner(BaseScanner):
                     remediation="Consider upgrading to p=reject for maximum protection.",
                     score_penalty=5,
                 ))
-            elif "p=none" in dmarc:
+            elif policy == "none":
                 findings.append(self._finding(
                     issue="DMARC policy is too weak",
                     evidence=f"p=none only monitors — unauthorized emails are still delivered: {dmarc}",
@@ -187,6 +191,12 @@ class DNSScanner(BaseScanner):
                         "p=none provides no protection — it only sends reports."
                     ),
                     score_penalty=15,
+                ))
+            else:
+                findings.append(self._finding(
+                    issue="DMARC policy unrecognised",
+                    evidence=f"Could not determine policy from: {dmarc}",
+                    severity="low",
                 ))
 
         except dns.resolver.NXDOMAIN:
