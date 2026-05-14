@@ -3,7 +3,7 @@ from uuid import uuid4
 from datetime import datetime
 from app.schemas.scan import ScanCreate, ScanResponse
 from app.core.enums import ScanStatus
-
+from workers.processor import run_scan
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -26,6 +26,7 @@ def create_scan(scan: ScanCreate, db: Session = Depends(get_db)):
     db.add(new_scan)
     db.commit()
     db.refresh(new_scan)
+    run_scan.delay(scan_id)
 
     return new_scan
 
