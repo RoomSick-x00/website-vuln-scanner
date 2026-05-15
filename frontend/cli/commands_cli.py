@@ -55,3 +55,11 @@ def get_results(scan_id):
         return {
             "error": str(e)
         }
+    
+def get_status(scan_id):
+
+    response = requests.get(
+        f"{BASE_URL}/scans/{scan_id}"
+    )
+
+    return response.json()
