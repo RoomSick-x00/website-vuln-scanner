@@ -50,6 +50,8 @@ services:
     build:
       context: ..
       dockerfile: deployment/Dockerfile.worker
+    dns:
+      - 8.8.8.8
     container_name: vuln_scanner_worker
     env_file:
       - ../.env

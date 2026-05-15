@@ -34,21 +34,6 @@ def create_scan(scan: ScanCreate, db: Session = Depends(get_db)):
     return new_scan
 
 
-
-@router.get("/{scan_id}", response_model=ScanResponse)
-def get_scan(scan_id: str):
-    # fake data for now
-    return {
-        "id": scan_id,
-        "target": "https://example.com",
-        "scan_type": "web",
-        "status": ScanStatus.RUNNING,
-        "created_at": datetime.utcnow(),
-        "started_at": datetime.utcnow(),
-        "finished_at": None
-    }
-
-
 @router.get("/", response_model=list[ScanResponse])
 def get_scans(db: Session = Depends(get_db)):
     scans = db.query(Scan).all()
