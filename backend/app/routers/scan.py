@@ -3,11 +3,12 @@ from uuid import uuid4
 from datetime import datetime
 from app.schemas.scan import ScanCreate, ScanResponse
 from app.core.enums import ScanStatus
-from workers.processor import run_scan
+# enqueue_scan(scan_id=scan_id, target_url=scan.target)
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.scan import Scan
+from tasks.scan_tasks import enqueue_scan
 
 router = APIRouter(prefix="/scans", tags=["Scans"])
 
@@ -26,7 +27,9 @@ def create_scan(scan: ScanCreate, db: Session = Depends(get_db)):
     db.add(new_scan)
     db.commit()
     db.refresh(new_scan)
-    run_scan.delay(scan_id)
+    print("CREATE_SCAN HIT")
+    enqueue_scan(scan_id, scan.target)
+    
 
     return new_scan
 
@@ -80,5 +83,6 @@ def update_status(scan_id: str, status: ScanStatus, db: Session = Depends(get_db
 
     db.commit()
     db.refresh(scan)
+    
 
     return scan
