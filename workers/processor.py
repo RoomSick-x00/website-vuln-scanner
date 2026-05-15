@@ -4,6 +4,9 @@ from workers.scanner_modules.xss import XSSScanner
 from workers.scanner_modules.dns import DNSScanner
 from tasks.celery_app import app
 from datetime import datetime, timezone
+from app.database import SessionLocal
+from app.models.scan import Scan
+from app.core.enums import ScanStatus
 
 SCANNER_REGISTRY = {
     "tls": TLSScanner(),
@@ -31,6 +34,13 @@ def run_scan(self, scan_id: int, task_type: str, target_url: str):
         }
 
     try:
+        db = SessionLocal()
+        scan = db.query(Scan).filter(Scan.id == scan_id).first()
+        if scan:
+            scan.status = ScanStatus.RUNNING
+            scan.started_at = datetime.now(timezone.utc)
+            db.commit()
+
         raw_findings = scanner.safe_scan(target_url, timeout=30)
 
     except Exception as e:
@@ -51,6 +61,16 @@ def run_scan(self, scan_id: int, task_type: str, target_url: str):
         {**finding, "scan_id": scan_id, "task_type": task_type}
         for finding in raw_findings
     ]
+
+    scan = db.query(Scan).filter(Scan.id == scan_id).first()
+
+    if scan:
+        scan.status = ScanStatus.COMPLETED
+        scan.finished_at = datetime.now(timezone.utc)
+        scan.findings = enriched_findings
+        db.commit()
+
+    db.close()
 
     return {
         "scan_id": scan_id,
