@@ -68,7 +68,7 @@ async function checkStatus() {
 
         }
 
-        else if (data.status === "COMPLETED") {
+        else if (data.status === "COMPLETED" || data.status === "completed") {
 
             statusText.innerText = "Scan completed!";
 
