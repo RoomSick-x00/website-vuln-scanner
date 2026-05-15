@@ -71,7 +71,7 @@ def results(scan_id):
 
     return render_template(
         "results.html",
-        results=data.get("results", [])
+        results=data.get("findings", [])
     )
 
 if __name__ == "__main__":

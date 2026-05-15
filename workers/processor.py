@@ -38,6 +38,7 @@ def run_scan(self, scan_id: int, task_type: str, target_url: str):
         scan = db.query(Scan).filter(Scan.id == scan_id).first()
         if scan:
             scan.status = ScanStatus.RUNNING
+            scan.started_at = datetime.now(timezone.utc)
             db.commit()
 
         raw_findings = scanner.safe_scan(target_url, timeout=30)
@@ -65,7 +66,8 @@ def run_scan(self, scan_id: int, task_type: str, target_url: str):
 
     if scan:
         scan.status = ScanStatus.COMPLETED
-        scan.finished_at = datetime.now(timezone.utc).isoformat()
+        scan.finished_at = datetime.now(timezone.utc)
+        scan.findings = enriched_findings
         db.commit()
 
     db.close()

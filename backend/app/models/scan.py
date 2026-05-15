@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime
+from sqlalchemy import Column, String, DateTime, JSON
 from sqlalchemy.sql import func
 from app.database import Base
 from app.core.enums import ScanStatus
@@ -10,7 +10,7 @@ class Scan(Base):
     target = Column(String, nullable=False)
     scan_type = Column(String, nullable=False)
     status = Column(String, default=ScanStatus.QUEUED)
-
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     started_at = Column(DateTime(timezone=True), nullable=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)
+    findings = Column(JSON, nullable=True, default=list)
