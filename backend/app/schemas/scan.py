@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from app.core.enums import ScanStatus
 
@@ -15,3 +15,7 @@ class ScanResponse(BaseModel):
     created_at: datetime
     started_at: Optional[datetime]
     finished_at: Optional[datetime]
+    findings: Optional[List[dict]] = []
+
+    class Config:
+        from_attributes = True
