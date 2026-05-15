@@ -1,44 +1,54 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Results</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='css/style.css') }}">
 </head>
+
 <body>
 
-<div class="navbar">🔍 Scan Results</div>
+<div class="background"></div>
+
+<nav class="navbar">
+    🔍 Vulnerability Scanner
+</nav>
 
 <div class="container">
+
     <div class="card">
 
-        <h2>Scan Results</h2>
-<div class="results">
-    {% for item in results %}
-    <div class="result-item">
-        <span>{{ item.name }}</span>
-        <span class="badge {{ item.severity|lower }}">
-            {{ item.severity }}
-        </span>
+        <h1>
+            Scan Results
+        </h1>
+
+        {% if results %}
+
+            <ul>
+
+            {% for result in results %}
+
+                <li>
+                    {{ result }}
+                </li>
+
+            {% endfor %}
+
+            </ul>
+
+        {% else %}
+
+            <p>
+                No vulnerabilities found.
+            </p>
+
+        {% endif %}
+
     </div>
-    {% endfor %}
-</div>
-       
 
-            <div class="result-item">
-                <span>Open Redirect</span>
-                <span class="badge medium">Medium</span>
-            </div>
-
-            <div class="result-item">
-                <span>Missing Security Headers</span>
-                <span class="badge safe">Low</span>
-            </div>
-
-        </div>
-
-        <a href="/" class="button-link">Start New Scan</a>
-
-    </div>
 </div>
 
 </body>
