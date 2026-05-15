@@ -8,6 +8,7 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.scan import Scan
+from tasks.scan_tasks import enqueue_scan
 
 router = APIRouter(prefix="/scans", tags=["Scans"])
 
@@ -26,6 +27,8 @@ def create_scan(scan: ScanCreate, db: Session = Depends(get_db)):
     db.add(new_scan)
     db.commit()
     db.refresh(new_scan)
+    print("CREATE_SCAN HIT")
+    enqueue_scan(scan_id, scan.target)
     
 
     return new_scan
@@ -80,5 +83,6 @@ def update_status(scan_id: str, status: ScanStatus, db: Session = Depends(get_db
 
     db.commit()
     db.refresh(scan)
+    
 
     return scan
