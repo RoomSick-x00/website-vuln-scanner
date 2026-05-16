@@ -14,6 +14,14 @@ sys.path.append(os.path.abspath(os.path.join(BASE_DIR, "..", "cli")))
 import commands_cli as commands
 
 
+def extract_domain(target: str) -> str:
+    """Match backend app.scan_utils.extract_domain for consistent verification."""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(target if "://" in target else f"https://{target}")
+    return (parsed.netloc or target).lower().removeprefix("www.")
+
+
 def generate_verify_token(domain):
     return "vuln-verify-" + hashlib.sha256(domain.encode()).hexdigest()[:16]
 
@@ -50,15 +58,15 @@ def submit_scan():
         modules = None
         needs_verify = False
 
-    # Extract domain from URL
-    from urllib.parse import urlparse
-    domain = urlparse(url).netloc or url
+    domain = extract_domain(url)
+    txt_host = f"_vuln-verify.{domain}"
 
     if needs_verify:
         token = generate_verify_token(domain)
         return render_template(
             "verify.html",
             domain=domain,
+            txt_host=txt_host,
             token=token,
             url=url,
             scan_type=scan_type,
@@ -80,8 +88,10 @@ def api_verify_domain():
     token = request.args.get("token")
     if not domain or not token:
         return jsonify({"verified": False, "error": "Missing params"})
+    domain = extract_domain(domain)
+    txt_host = f"_vuln-verify.{domain}"
     try:
-        answers = dns.resolver.resolve(domain, "TXT")
+        answers = dns.resolver.resolve(txt_host, "TXT")
         for r in answers:
             for s in r.strings:
                 if token.encode() in s or token in s.decode(errors="ignore"):
