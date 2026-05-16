@@ -1,6 +1,10 @@
+import os
 import requests
 
-BASE_URL = "http://backend:8000"
+# BACKEND_URL can be set via environment variable.
+# Local development defaults to http://localhost:8000
+# Docker sets this via docker-compose.yml e.g. BACKEND_URL=http://backend:8000
+BASE_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 import api
 
