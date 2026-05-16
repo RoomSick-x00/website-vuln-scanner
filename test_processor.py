@@ -1,11 +1,11 @@
 from workers.processor import run_scan
 
 tests = [
-    (1, "tls", "https://example.com"),
-    (2, "http_headers", "https://example.com"),
-    (3, "xss", "https://google.com/search?q=test"),
-    (4, "dns", "https://github.com"),
-    (5, "unknown", "https://example.com"),
+    ("test-001", "tls", "https://example.com"),
+    ("test-002", "http_headers", "https://example.com"),
+    ("test-003", "xss", "https://google.com/search?q=test"),
+    ("test-004", "dns", "https://github.com"),
+    ("test-005", "unknown", "https://example.com"),
 ]
 
 for scan_id, task_type, url in tests:
@@ -15,3 +15,7 @@ for scan_id, task_type, url in tests:
     print(f"Findings: {len(result['findings'])}")
     for f in result['findings']:
         print(f"  [{f['severity']}] {f['issue']}")
+        
+# $env:PYTHONPATH = "C:\Users\mailp\OneDrive\Desktop\Project V\website-vuln-scanner;C:\Users\mailp\OneDrive\Desktop\Project V\website-vuln-scanner\backend"
+# $env:DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/scanner_db"
+# python test_processor.py
