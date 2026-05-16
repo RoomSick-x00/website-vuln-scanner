@@ -3,105 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scan Status</title>
-
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Scanning...</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-
 <body>
-
 <div class="background"></div>
-
 <nav class="navbar">
-    🔍 Vulnerability Scanner
+    <a href="/" class="nav-logo">🔍 Vulnerability Scanner</a>
 </nav>
-
 <div class="container">
-
-    <div class="card">
-
-        <h1 id="status-title">
-            Scanning...
-        </h1>
-
-        <p id="status-text">
-            Checking scan status...
-        </p>
-
-        <p class="scan-id">
-            <strong>Scan ID:</strong>
-            {{ scan_id }}
-        </p>
-
-        <div class="loader"></div>
-
+    <div class="card status-card">
+        <div class="spinner-ring"></div>
+        <h1 id="status-title">Scanning...</h1>
+        {% if target %}
+        <p class="scan-target">🔗 <strong>{{ target }}</strong></p>
+        {% endif %}
+        <p id="status-text" class="subtitle">Checking scan status...</p>
+        <p class="wait-hint">This usually takes 30–60 seconds</p>
     </div>
-
 </div>
-
 <script>
-
 const scanId = "{{ scan_id }}";
-
 async function checkStatus() {
-
     try {
-
         const response = await fetch(`/api/status/${scanId}`);
-
         const data = await response.json();
-
-        console.log(data);
-
         const statusText = document.getElementById("status-text");
-
+        const title = document.getElementById("status-title");
         if (data.status === "QUEUED") {
-
             statusText.innerText = "Waiting in queue...";
-
-        }
-
-        else if (data.status === "RUNNING") {
-
+        } else if (data.status === "RUNNING") {
             statusText.innerText = "Scanning target website...";
-
-        }
-
-        else if (data.status === "COMPLETED" || data.status === "completed") {
-
-            statusText.innerText = "Scan completed!";
-
-            setTimeout(() => {
-                window.location.href = `/results/${scanId}`;
-            }, 1500);
-
-        }
-
-        else {
-
+        } else if (data.status === "COMPLETED" || data.status === "completed") {
+            title.innerText = "Scan Complete!";
+            statusText.innerText = "Redirecting to results...";
+            setTimeout(() => { window.location.href = `/results/${scanId}`; }, 1500);
+        } else {
             statusText.innerText = `Status: ${data.status}`;
-
         }
-
+    } catch (error) {
+        document.getElementById("status-text").innerText = "Error checking scan status";
     }
-
-    catch (error) {
-
-        console.error(error);
-
-        document.getElementById("status-text").innerText =
-            "Error checking scan status";
-
-    }
-
 }
-
 setInterval(checkStatus, 3000);
-
 checkStatus();
-
 </script>
-
 </body>
 </html>

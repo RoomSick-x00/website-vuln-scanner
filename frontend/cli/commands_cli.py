@@ -1,69 +1,41 @@
 import os
 import requests
 
-# BACKEND_URL can be set via environment variable.
-# Local development defaults to http://localhost:8000
-# Docker sets this via docker-compose.yml e.g. BACKEND_URL=http://backend:8000
 BASE_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
-
-import api
 
 
 def submit_scan(url):
+    return submit_scan_with_type(url, "quick")
 
+
+def submit_scan_with_type(url, scan_type):
     payload = {
         "target": url,
-        "scan_type": "full"
+        "scan_type": scan_type
     }
-
     try:
-        response = requests.post(
-            f"{BASE_URL}/scans/",
-            json=payload
-        )
-
-        print("STATUS:", response.status_code)
-        print("RESPONSE:", response.text)
-
+        response = requests.post(f"{BASE_URL}/scans/", json=payload)
         if response.status_code != 200:
-            return {
-                "error": f"Backend error: {response.text}"
-            }
-
+            return {"error": f"Backend error: {response.text}"}
         return response.json()
-
     except Exception as e:
-        return {
-            "error": str(e)
-        }
+        return {"error": str(e)}
 
 
 def get_results(scan_id):
-
     try:
-        response = requests.get(
-            f"{BASE_URL}/scans/{scan_id}"
-        )
-
-        print("STATUS:", response.status_code)
-        print("RESPONSE:", response.text)
-
+        response = requests.get(f"{BASE_URL}/scans/{scan_id}")
         if response.status_code != 200:
-            return {
-                "error": f"Backend error: {response.text}"
-            }
-
+            return {"error": f"Backend error: {response.text}"}
         return response.json()
-
     except Exception as e:
-        return {
-            "error": str(e)
-        }
-    
+        return {"error": str(e)}
+
+
 def get_status(scan_id):
-
-    response = requests.get(
-        f"{BASE_URL}/scans/{scan_id}"
-    )
-
+    response = requests.get(f"{BASE_URL}/scans/{scan_id}")
     return response.json()
+
+
+def check_status(scan_id):
+    return get_status(scan_id)  
