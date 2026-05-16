@@ -5,81 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Verify Domain</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <style>
-        body { overflow-y: auto; min-height: 100vh; }
-        .background { position: fixed; }
-        .verify-container {
-            max-width: 680px;
-            margin: 0 auto;
-            padding: 40px 20px 60px;
-            color: white;
-        }
-        .verify-card {
-            background: rgba(255,255,255,0.07);
-            backdrop-filter: blur(18px);
-            border: 1px solid rgba(255,255,255,0.12);
-            border-radius: 20px;
-            padding: 36px;
-        }
-        .verify-card h1 { font-size: 24px; margin-bottom: 8px; }
-        .verify-card p  { color: #94a3b8; font-size: 14px; line-height: 1.7; margin-bottom: 20px; }
-        .steps { counter-reset: step; margin-bottom: 24px; }
-        .step {
-            display: flex; gap: 14px; align-items: flex-start;
-            margin-bottom: 20px;
-        }
-        .step-num {
-            width: 28px; height: 28px; border-radius: 50%;
-            background: #6366f1; color: white;
-            font-size: 13px; font-weight: 700;
-            display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0; margin-top: 2px;
-        }
-        .step-body { flex: 1; }
-        .step-body strong { display: block; font-size: 14px; margin-bottom: 6px; }
-        .step-body p { margin: 0; font-size: 13px; }
-        .txt-record {
-            background: rgba(0,0,0,0.3);
-            border: 1px solid rgba(99,102,241,0.4);
-            border-radius: 10px;
-            padding: 14px 16px;
-            margin: 10px 0;
-            font-family: monospace;
-            font-size: 13px;
-            color: #a5b4fc;
-            word-break: break-all;
-        }
-        .txt-record span { color: #818cf8; }
-        .copy-btn {
-            width: auto;
-            padding: 8px 18px;
-            font-size: 13px;
-            border-radius: 8px;
-            margin-top: 6px;
-            background: rgba(99,102,241,0.3);
-            border: 1px solid rgba(99,102,241,0.5);
-        }
-        .copy-btn:hover { background: rgba(99,102,241,0.5); transform: none; box-shadow: none; }
-        .verify-btn {
-            width: 100%; padding: 16px;
-            border-radius: 14px;
-            background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            color: white; font-size: 16px; font-weight: 600;
-            cursor: pointer; border: none; transition: 0.3s;
-            margin-top: 8px;
-        }
-        .verify-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(139,92,246,0.35); }
-        .verify-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-        .status-msg {
-            margin-top: 16px; padding: 12px 16px;
-            border-radius: 10px; font-size: 14px;
-            display: none;
-        }
-        .status-msg.error   { background: rgba(239,68,68,0.15);  border: 1px solid #ef4444; color: #f87171; }
-        .status-msg.success { background: rgba(74,222,128,0.15); border: 1px solid #4ade80; color: #4ade80; }
-    </style>
 </head>
-<body>
+<body class="verify-page">
 <div class="background"></div>
 <nav class="navbar">
     <a href="/" class="nav-logo">Vulnerability Scanner</a>
@@ -87,10 +14,10 @@
 
 <div class="verify-container">
     <div class="verify-card">
-        <h1>🔐 Verify Domain Ownership</h1>
+        <h1>Verify Domain Ownership</h1>
         <p>
             To run a Full or XSS scan we need to confirm you own
-            <strong style="color:white">{{ domain }}</strong>.
+            <strong class="domain-highlight">{{ domain }}</strong>.
             Add the TXT record below to your DNS, then click Verify.
         </p>
 
@@ -111,7 +38,11 @@
                         <span>Name/Host:</span> {{ txt_host }}<br>
                         <span>Value:</span> {{ token }}
                     </div>
-                    <button class="copy-btn" onclick="copyToken()">📋 Copy Value</button>
+                    <p class="dns-hint">
+                        If your URL uses www (e.g. www.example.com), add the TXT record to the root domain (@).
+                        If unsure, ask your DNS provider.
+                    </p>
+                    <button type="button" class="copy-btn" onclick="copyToken()">Copy</button>
                 </div>
             </div>
             <div class="step">
@@ -123,12 +54,21 @@
             </div>
         </div>
 
-        <button class="verify-btn" id="verifyBtn" onclick="verifyDomain()">
-            ✅ Verify & Start Scan
+        <p class="propagation-note">
+            DNS changes can take up to 15 minutes to propagate. The verification token will remain the same —
+            you can close this page and return later using the same link.
+        </p>
+
+        <button type="button" class="verify-btn" id="verifyBtn" onclick="verifyDomain()">
+            Verify and Start Scan
         </button>
+        <div class="verify-actions" id="retryActions" style="display:none">
+            <button type="button" class="btn-secondary btn-inline" id="retryBtn" onclick="verifyDomain()">
+                Try again
+            </button>
+        </div>
         <div class="status-msg" id="statusMsg"></div>
 
-        <!-- Hidden form to submit after verification -->
         <form id="scanForm" action="/start-scan" method="POST" style="display:none">
             <input type="hidden" name="url" value="{{ url }}">
             <input type="hidden" name="scan_type" value="{{ scan_type }}">
@@ -136,50 +76,62 @@
             <input type="hidden" name="modules" value="{{ mod }}">
             {% endfor %}
         </form>
+
+        <p class="verify-footer">
+            <a href="/" class="text-link">Cancel and scan a different URL</a>
+        </p>
     </div>
 </div>
 
 <script>
 const domain = "{{ domain }}";
 const token  = "{{ token }}";
+const VERIFY_BTN_LABEL = "Verify and Start Scan";
 
 function copyToken() {
     navigator.clipboard.writeText(token);
     const btn = document.querySelector('.copy-btn');
-    btn.textContent = '✅ Copied!';
-    setTimeout(() => btn.textContent = '📋 Copy Value', 2000);
+    btn.textContent = 'Copied';
+    setTimeout(function () { btn.textContent = 'Copy'; }, 2000);
 }
 
 async function verifyDomain() {
     const btn = document.getElementById('verifyBtn');
     const msg = document.getElementById('statusMsg');
+    const retryActions = document.getElementById('retryActions');
 
     btn.disabled = true;
     btn.textContent = 'Checking DNS...';
     msg.style.display = 'none';
+    retryActions.style.display = 'none';
 
     try {
-        const res = await fetch(`/api/verify-domain?domain=${encodeURIComponent(domain)}&token=${encodeURIComponent(token)}`);
+        const res = await fetch(
+            '/api/verify-domain?domain=' + encodeURIComponent(domain) +
+            '&token=' + encodeURIComponent(token)
+        );
         const data = await res.json();
 
         if (data.verified) {
             msg.className = 'status-msg success';
-            msg.textContent = '✅ Domain verified! Starting scan...';
+            msg.textContent = 'Verified. Starting scan...';
             msg.style.display = 'block';
-            setTimeout(() => document.getElementById('scanForm').submit(), 1500);
+            setTimeout(function () { document.getElementById('scanForm').submit(); }, 1500);
         } else {
             msg.className = 'status-msg error';
-            msg.textContent = '❌ TXT record not found. DNS may take a few minutes to propagate — try again shortly.';
+            msg.textContent = data.error || 'Verification failed. TXT record not found yet.';
             msg.style.display = 'block';
             btn.disabled = false;
-            btn.textContent = '✅ Verify & Start Scan';
+            btn.textContent = VERIFY_BTN_LABEL;
+            retryActions.style.display = 'flex';
         }
     } catch (e) {
         msg.className = 'status-msg error';
-        msg.textContent = '❌ Error checking DNS. Please try again.';
+        msg.textContent = 'Error checking DNS. Please try again.';
         msg.style.display = 'block';
         btn.disabled = false;
-        btn.textContent = '✅ Verify & Start Scan';
+        btn.textContent = VERIFY_BTN_LABEL;
+        retryActions.style.display = 'flex';
     }
 }
 </script>

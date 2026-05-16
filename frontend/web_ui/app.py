@@ -126,12 +126,18 @@ def status(scan_id):
 
 
 MODULE_LABELS = {
-    "tls": "TLS / SSL",
+    "tls": "TLS/SSL",
     "http_headers": "HTTP Headers",
-    "dns": "DNS Configuration",
+    "dns": "DNS",
     "xss": "XSS",
 }
+
+
 MODULE_ORDER = ["tls", "http_headers", "dns", "xss"]
+
+
+def _label_modules(modules):
+    return [MODULE_LABELS.get(m, m) for m in modules]
 
 
 @app.route("/results/<scan_id>")
@@ -145,6 +151,8 @@ def results(scan_id):
     ran_modules = data.get("ran_modules", [])
     skipped_modules = data.get("skipped_modules", [])
 
+    active_modules = [m for m in MODULE_ORDER if m in grouped]
+
     return render_template(
         "results.html",
         scan_id=scan_id,
@@ -152,6 +160,9 @@ def results(scan_id):
         results=findings,
         ran_modules=ran_modules,
         skipped_modules=skipped_modules,
+        ran_modules_display=_label_modules(ran_modules),
+        skipped_modules_display=_label_modules(skipped_modules),
+        active_modules=active_modules,
         module_labels=MODULE_LABELS,
         module_order=MODULE_ORDER,
     )

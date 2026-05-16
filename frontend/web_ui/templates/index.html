@@ -17,7 +17,7 @@
         <h1>Website Vulnerability Scanner</h1>
         <p class="subtitle">Scan websites for TLS, headers, DNS, and XSS issues.</p>
 
-        <form action="/submit" method="POST" class="scan-form">
+        <form action="/submit" method="POST" class="scan-form" id="scanForm">
             <div class="input-group input-group-compact">
                 <input type="url" name="url" class="url-input" placeholder="https://example.com" required>
             </div>
@@ -41,23 +41,12 @@
             </div>
 
             <div class="custom-modules" id="customModules">
-                <label class="module-pill">
-                    <input type="checkbox" name="modules" value="tls" checked>
-                    <span>TLS</span>
-                </label>
-                <label class="module-pill">
-                    <input type="checkbox" name="modules" value="http_headers" checked>
-                    <span>HTTP Headers</span>
-                </label>
-                <label class="module-pill">
-                    <input type="checkbox" name="modules" value="dns" checked>
-                    <span>DNS</span>
-                </label>
-                <label class="module-pill">
-                    <input type="checkbox" name="modules" value="xss" onchange="onXssToggle()">
-                    <span>XSS</span>
-                </label>
+                <button type="button" class="module-btn selected" data-module="tls">TLS</button>
+                <button type="button" class="module-btn selected" data-module="http_headers">HTTP Headers</button>
+                <button type="button" class="module-btn selected" data-module="dns">DNS</button>
+                <button type="button" class="module-btn" data-module="xss">XSS</button>
             </div>
+            <div id="moduleInputs"></div>
             <p class="xss-warning" id="xssWarning" style="display:none">
                 XSS scan submits test data to your site. Only scan sites you own.
             </p>
@@ -68,24 +57,74 @@
 </div>
 
 <script>
+const MODULE_DEFAULTS = ['tls', 'http_headers', 'dns'];
+
+function getSelectedModules() {
+    return Array.from(document.querySelectorAll('.module-btn.selected'))
+        .map(function (btn) { return btn.getAttribute('data-module'); });
+}
+
+function syncModuleInputs() {
+    const container = document.getElementById('moduleInputs');
+    container.innerHTML = '';
+    getSelectedModules().forEach(function (mod) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'modules';
+        input.value = mod;
+        container.appendChild(input);
+    });
+}
+
 function onModeChange(radio) {
-    document.querySelectorAll('.mode-card').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.mode-card').forEach(function (el) {
+        el.classList.remove('active');
+    });
     radio.closest('.mode-card').classList.add('active');
     const custom = document.getElementById('customModules');
     custom.style.display = radio.value === 'custom' ? 'grid' : 'none';
     if (radio.value !== 'custom') {
         document.getElementById('xssWarning').style.display = 'none';
     } else {
+        syncModuleInputs();
         onXssToggle();
     }
 }
 
 function onXssToggle() {
-    const xssChecked = document.querySelector('input[name="modules"][value="xss"]').checked;
+    const modules = getSelectedModules();
     const customSelected = document.querySelector('input[name="scan_mode"][value="custom"]').checked;
     document.getElementById('xssWarning').style.display =
-        customSelected && xssChecked ? 'block' : 'none';
+        customSelected && modules.indexOf('xss') !== -1 ? 'block' : 'none';
 }
+
+document.querySelectorAll('.module-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        const isCustom = document.querySelector('input[name="scan_mode"][value="custom"]').checked;
+        if (!isCustom) return;
+
+        btn.classList.toggle('selected');
+        const selected = getSelectedModules();
+        if (selected.length === 0) {
+            btn.classList.add('selected');
+        }
+        syncModuleInputs();
+        onXssToggle();
+    });
+});
+
+document.getElementById('scanForm').addEventListener('submit', function (e) {
+    const isCustom = document.querySelector('input[name="scan_mode"][value="custom"]').checked;
+    if (isCustom) {
+        syncModuleInputs();
+        if (getSelectedModules().length === 0) {
+            e.preventDefault();
+            alert('Please select at least one scanner.');
+        }
+    }
+});
+
+syncModuleInputs();
 </script>
 </body>
 </html>
