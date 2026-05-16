@@ -1,16 +1,14 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-# PostgreSQL Database URL
-DATABASE_URL = "postgresql://postgres:aarsh@db:5432/scanner_db"
+# DATABASE_URL is set via environment variable.
+# Local: set $env:DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/scanner_db" in terminal
+# Docker: set via docker-compose.yml e.g. DATABASE_URL=postgresql://postgres:aarsh@db:5432/scanner_db
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/scanner_db")
 
-# Create engine
 engine = create_engine(DATABASE_URL)
-
-# Create sessionmaker
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Create base class
 Base = declarative_base()
 
 def get_db():
