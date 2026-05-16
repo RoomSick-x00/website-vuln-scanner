@@ -45,9 +45,26 @@
             <a class="btn-secondary" href="/">Scan another URL</a>
         </div>
 
-        {% if active_modules %}
+        {% if ran_modules %}
+        <style>
+            .tab-btn { width: auto; }
+        </style>
         <div class="tab-bar" role="tablist">
-            {% for module in active_modules %}
+            {% set defined_order = ['tls', 'http_headers', 'dns', 'xss'] %}
+            {% set ordered_modules = [] %}
+            {% for m in defined_order %}
+                {% if m in ran_modules %}
+                    {% set _ = ordered_modules.append(m) %}
+                {% endif %}
+            {% endfor %}
+            {% for m in ran_modules %}
+                {% if m not in defined_order %}
+                    {% set _ = ordered_modules.append(m) %}
+                {% endif %}
+            {% endfor %}
+            {% set tab_labels = {'tls': 'TLS/SSL', 'http_headers': 'HTTP Headers', 'dns': 'DNS', 'xss': 'XSS'} %}
+            
+            {% for module in ordered_modules %}
             <button
                 type="button"
                 class="tab-btn{% if loop.first %} active{% endif %}"
@@ -55,13 +72,13 @@
                 data-tab="{{ module }}"
                 aria-selected="{{ 'true' if loop.first else 'false' }}"
                 aria-controls="panel-{{ module }}"
-            >{{ module_labels.get(module, module) }}</button>
+            >{{ tab_labels.get(module, module | replace('_', ' ') | title) }}</button>
             {% endfor %}
         </div>
 
         <div class="tab-panels">
-            {% for module in active_modules %}
-            {% set module_findings = grouped[module] %}
+            {% for module in ordered_modules %}
+            {% set module_findings = grouped.get(module, []) %}
             {% set vuln_findings = module_findings | rejectattr('severity', 'equalto', 'info') | list %}
             {% set info_findings = module_findings | selectattr('severity', 'equalto', 'info') | list %}
             <div
