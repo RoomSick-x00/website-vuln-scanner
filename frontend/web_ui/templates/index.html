@@ -4,56 +4,82 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vulnerability Scanner</title>
-
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
-
 <body>
+<div class="background"></div>
+<nav class="navbar">
+    <a href="/" class="nav-logo">🔍 Vulnerability Scanner</a>
+</nav>
+<div class="container">
+    <div class="card home-card">
+        <div class="icon">🛡️</div>
+        <h1>Website Vulnerability Scanner</h1>
+        <p class="subtitle">Scan websites for vulnerabilities and monitor security reports instantly.</p>
+        <p class="tagline">Checks TLS/SSL · HTTP Headers · DNS · XSS</p>
 
-    <div class="background"></div>
-
-    <nav class="navbar">
-        <div class="logo">
-            🔍 Vulnerability Scanner
-        </div>
-    </nav>
-
-    <div class="container">
-
-        <div class="card">
-
-            <div class="icon">
-                🛡️
+        <form action="/submit" method="POST">
+            <div class="input-group">
+                <input type="text" name="url" placeholder="https://example.com" required>
+                <p class="input-hint">e.g. https://yourwebsite.com</p>
             </div>
 
-            <h1>Website Vulnerability Scanner</h1>
+            <div class="scan-modes">
+                <label class="mode-option active" id="mode-quick">
+                    <input type="radio" name="scan_mode" value="quick" checked onchange="onModeChange(this)">
+                    <div class="mode-content">
+                        <span class="mode-title">⚡ Quick Scan</span>
+                        <span class="mode-desc">TLS + HTTP Headers · No verification</span>
+                    </div>
+                </label>
+                <label class="mode-option" id="mode-full">
+                    <input type="radio" name="scan_mode" value="full" onchange="onModeChange(this)">
+                    <div class="mode-content">
+                        <span class="mode-title">🔍 Full Scan</span>
+                        <span class="mode-desc">All modules · Domain verification required</span>
+                    </div>
+                </label>
+                <label class="mode-option" id="mode-custom">
+                    <input type="radio" name="scan_mode" value="custom" onchange="onModeChange(this)">
+                    <div class="mode-content">
+                        <span class="mode-title">⚙️ Custom Scan</span>
+                        <span class="mode-desc">Pick your modules</span>
+                    </div>
+                </label>
+            </div>
 
-            <p class="subtitle">
-                Scan websites for vulnerabilities and monitor security reports instantly.
-            </p>
+            <div class="custom-modules" id="customModules">
+                <label class="module-check">
+                    <input type="checkbox" name="modules" value="http_headers" checked>
+                    <span>🔒 HTTP Headers</span>
+                </label>
+                <label class="module-check">
+                    <input type="checkbox" name="modules" value="tls" checked>
+                    <span>🔐 TLS / SSL</span>
+                </label>
+                <label class="module-check">
+                    <input type="checkbox" name="modules" value="dns">
+                    <span>🌐 DNS</span>
+                </label>
+                <label class="module-check">
+                    <input type="checkbox" name="modules" value="xss">
+                    <span>⚠️ XSS <small style="color:#f87171">(requires verification)</small></span>
+                </label>
+            </div>
 
-            <form action="/submit" method="POST">
-
-                <div class="input-group">
-                    <input
-                        type="text"
-                        name="url"
-                        placeholder="https://example.com"
-                        required
-                    >
-                </div>
-
-                <button type="submit">
-                    Start Security Scan
-                </button>
-
-            </form>
-
-        </div>
-
+            <button type="submit">Start Security Scan</button>
+        </form>
     </div>
+</div>
 
+<script>
+function onModeChange(radio) {
+    document.querySelectorAll('.mode-option').forEach(el => el.classList.remove('active'));
+    radio.closest('.mode-option').classList.add('active');
+    const custom = document.getElementById('customModules');
+    custom.style.display = radio.value === 'custom' ? 'grid' : 'none';
+}
+</script>
 </body>
 </html>
