@@ -9,7 +9,7 @@
 <body>
 <div class="background"></div>
 <nav class="navbar">
-    <a href="/" class="nav-logo">🔍 Vulnerability Scanner</a>
+    <a href="/" class="nav-logo">Vulnerability Scanner</a>
 </nav>
 
 <div class="results-container">
@@ -24,59 +24,85 @@
         {% set info     = results | selectattr('severity', 'equalto', 'info')     | list %}
 
         <div class="severity-summary">
-            <span class="sev-pill sev-critical">🔴 Critical: {{ critical | length }}</span>
-            <span class="sev-pill sev-high">🟠 High: {{ high | length }}</span>
-            <span class="sev-pill sev-medium">🟡 Medium: {{ medium | length }}</span>
-            <span class="sev-pill sev-low">🔵 Low: {{ low | length }}</span>
-            <span class="sev-pill sev-info">⚪ Info: {{ info | length }}</span>
+            <span class="sev-pill sev-critical">Critical: {{ critical | length }}</span>
+            <span class="sev-pill sev-high">High: {{ high | length }}</span>
+            <span class="sev-pill sev-medium">Medium: {{ medium | length }}</span>
+            <span class="sev-pill sev-low">Low: {{ low | length }}</span>
+            <span class="sev-pill sev-info">Info: {{ info | length }}</span>
         </div>
 
-        <a class="btn-pdf" href="/report/{{ scan_id }}">⬇ Download PDF Report</a>
+        <p class="scanner-summary">
+            {% if ran_modules %}
+            <span>Scanners run: {{ ran_modules | join(' · ') }}</span>
+            {% endif %}
+            {% if skipped_modules %}
+            <span class="scanner-skipped">Skipped: {{ skipped_modules | join(' · ') }}</span>
+            {% endif %}
+        </p>
 
-        {% set vuln_findings = results | rejectattr('severity', 'equalto', 'info') | list %}
-        {% set info_findings = results | selectattr('severity', 'equalto', 'info') | list %}
+        <a class="btn-pdf" href="/report/{{ scan_id }}">Download PDF Report</a>
 
-        {% if vuln_findings %}
-        <h2 class="section-title">⚠️ Vulnerabilities Found</h2>
-        {% for r in vuln_findings %}
-        <div class="finding-card border-{{ r.severity | lower }}">
-            <div class="finding-top">
-                <span class="badge badge-{{ r.severity | lower }}">{{ r.severity }}</span>
-                <span class="finding-issue">{{ r.issue }}</span>
-            </div>
-            <div class="finding-body">
-                <p><span class="label">Evidence:</span> {{ r.evidence }}</p>
-                {% if r.remediation %}
-                <div class="remediation-box">
-                    🔧 <span>{{ r.remediation }}</span>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-        {% endfor %}
-        {% else %}
-        <div class="no-vulns">✅ No vulnerabilities detected</div>
-        {% endif %}
+        {% for module in module_order %}
+        {% if module in grouped %}
+        {% set module_findings = grouped[module] %}
+        {% set vuln_findings = module_findings | rejectattr('severity', 'equalto', 'info') | list %}
+        {% set info_findings = module_findings | selectattr('severity', 'equalto', 'info') | list %}
+        <section class="module-section">
+            <h2 class="module-header">
+                {{ module_labels.get(module, module) }}
+                <span class="module-count">({{ module_findings | length }})</span>
+            </h2>
 
-        {% if info_findings %}
-        <details class="info-section">
-            <summary class="info-summary">ℹ️ Passing Checks ({{ info_findings | length }})</summary>
-            {% for r in info_findings %}
-            <div class="finding-card border-info">
+            {% for r in vuln_findings %}
+            <div class="finding-card border-{{ r.severity | lower }}">
                 <div class="finding-top">
-                    <span class="badge badge-info">info</span>
+                    <span class="badge badge-{{ r.severity | lower }}">{{ r.severity }}</span>
                     <span class="finding-issue">{{ r.issue }}</span>
                 </div>
                 <div class="finding-body">
                     <p><span class="label">Evidence:</span> {{ r.evidence }}</p>
+                    {% if r.remediation %}
+                    <div class="remediation-box">
+                        <span class="remediation-icon">&#128295;</span>
+                        <span>{{ r.remediation }}</span>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
-        </details>
+
+            {% if info_findings %}
+            <details class="info-section module-info-section">
+                <summary class="info-summary">Show passing checks ({{ info_findings | length }})</summary>
+                {% for r in info_findings %}
+                <div class="finding-card border-info">
+                    <div class="finding-top">
+                        <span class="badge badge-info">info</span>
+                        <span class="finding-issue">{{ r.issue }}</span>
+                    </div>
+                    <div class="finding-body">
+                        <p><span class="label">Evidence:</span> {{ r.evidence }}</p>
+                        {% if r.remediation %}
+                        <div class="remediation-box">
+                            <span class="remediation-icon">&#128295;</span>
+                            <span>{{ r.remediation }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </details>
+            {% endif %}
+        </section>
+        {% endif %}
+        {% endfor %}
+
+        {% if not grouped %}
+        <div class="no-vulns">No findings recorded for this scan.</div>
         {% endif %}
 
         {% else %}
-        <div class="no-vulns">✅ No vulnerabilities found.</div>
+        <div class="no-vulns">No vulnerabilities found.</div>
         {% endif %}
     </div>
 </div>

@@ -9,14 +9,16 @@
 <body>
 <div class="background"></div>
 <nav class="navbar">
-    <a href="/" class="nav-logo">🔍 Vulnerability Scanner</a>
+    <a href="/" class="nav-logo">Vulnerability Scanner</a>
 </nav>
 <div class="container">
     <div class="card status-card">
-        <div class="spinner-ring"></div>
+        <div class="spinner-wrap">
+            <div class="spinner-ring"></div>
+        </div>
         <h1 id="status-title">Scanning...</h1>
         {% if target %}
-        <p class="scan-target">🔗 <strong>{{ target }}</strong></p>
+        <p class="scan-target">Scanning: <strong>{{ target }}</strong></p>
         {% endif %}
         <p id="status-text" class="subtitle">Checking scan status...</p>
         <p class="wait-hint">This usually takes 30–60 seconds</p>

@@ -21,9 +21,15 @@ SCAN_MODES = {
 }
 
 @app.task(name="workers.processor.run_scan", bind=True, max_retries=3)
-def run_scan(self, scan_id: int, task_type: str, target_url: str, scan_mode: str = "quick"):
-    # Skip this scanner if not allowed in the current scan mode
-    allowed_scanners = SCAN_MODES.get(scan_mode, SCAN_MODES["quick"])
+def run_scan(
+    self,
+    scan_id: int,
+    task_type: str,
+    target_url: str,
+    scan_mode: str = "quick",
+    allowed_modules: list | None = None,
+):
+    allowed_scanners = allowed_modules or SCAN_MODES.get(scan_mode, SCAN_MODES["quick"])
     if task_type not in allowed_scanners:
         return {
             "scan_id": scan_id,
@@ -79,9 +85,10 @@ def run_scan(self, scan_id: int, task_type: str, target_url: str, scan_mode: str
     scan = db.query(Scan).filter(Scan.id == scan_id).first()
 
     if scan:
+        existing = list(scan.findings or [])
+        scan.findings = existing + enriched_findings
         scan.status = ScanStatus.COMPLETED
         scan.finished_at = datetime.now(timezone.utc)
-        scan.findings = enriched_findings
         db.commit()
 
     db.close()

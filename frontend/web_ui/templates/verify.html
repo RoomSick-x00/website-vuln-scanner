@@ -82,7 +82,7 @@
 <body>
 <div class="background"></div>
 <nav class="navbar">
-    <a href="/" class="nav-logo">🔍 Vulnerability Scanner</a>
+    <a href="/" class="nav-logo">Vulnerability Scanner</a>
 </nav>
 
 <div class="verify-container">
@@ -132,6 +132,9 @@
         <form id="scanForm" action="/start-scan" method="POST" style="display:none">
             <input type="hidden" name="url" value="{{ url }}">
             <input type="hidden" name="scan_type" value="{{ scan_type }}">
+            {% for mod in modules %}
+            <input type="hidden" name="modules" value="{{ mod }}">
+            {% endfor %}
         </form>
     </div>
 </div>

@@ -34,18 +34,20 @@ def submit_scan():
     url = request.form["url"]
     scan_mode = request.form.get("scan_mode", "quick")
 
-    # Custom mode — build scan_type from checkboxes
     if scan_mode == "custom":
         selected = request.form.getlist("modules")
         if not selected:
             return "Please select at least one module."
-        scan_type = ",".join(selected)
+        scan_type = "custom"
+        modules = selected
         needs_verify = "xss" in selected
     elif scan_mode == "full":
         scan_type = "full"
+        modules = None
         needs_verify = True
     else:
         scan_type = "quick"
+        modules = None
         needs_verify = False
 
     # Extract domain from URL
@@ -59,11 +61,11 @@ def submit_scan():
             domain=domain,
             token=token,
             url=url,
-            scan_type=scan_type
+            scan_type=scan_type,
+            modules=modules or [],
         )
 
-    # No verification needed — submit directly
-    result = commands.submit_scan_with_type(url, scan_type)
+    result = commands.submit_scan_with_type(url, scan_type, modules=modules)
     if "error" in result:
         return result["error"]
     if "id" not in result:
@@ -92,8 +94,14 @@ def api_verify_domain():
 @app.route("/start-scan", methods=["POST"])
 def start_scan():
     url = request.form["url"]
-    scan_type = request.form["scan_type"]
-    result = commands.submit_scan_with_type(url, scan_type)
+    scan_type = request.form.get("scan_type", "quick")
+    modules = request.form.getlist("modules")
+    if not modules and "," in scan_type:
+        modules = [m.strip() for m in scan_type.split(",")]
+        scan_type = "custom"
+    result = commands.submit_scan_with_type(
+        url, scan_type, modules=modules if modules else None
+    )
     if "error" in result:
         return result["error"]
     if "id" not in result:
@@ -107,28 +115,35 @@ def status(scan_id):
     return render_template("status.html", scan_id=scan_id, status=response["status"])
 
 
+MODULE_LABELS = {
+    "tls": "TLS / SSL",
+    "http_headers": "HTTP Headers",
+    "dns": "DNS Configuration",
+    "xss": "XSS",
+}
+MODULE_ORDER = ["tls", "http_headers", "dns", "xss"]
+
+
 @app.route("/results/<scan_id>")
 def results(scan_id):
     data = commands.get_results(scan_id)
-    findings = data.get("findings", [])
+    if "error" in data:
+        return data["error"]
 
-    # Group by module_name
-    from collections import defaultdict
-    grouped = defaultdict(list)
-    for f in findings:
-        grouped[f.get("module_name", "unknown")].append(f)
-
-    all_modules = ["http_headers", "tls", "dns", "xss"]
-    ran_modules = list(grouped.keys())
-    skipped_modules = [m for m in all_modules if m not in ran_modules]
+    findings = data.get("results", data.get("findings", []))
+    grouped = data.get("grouped", {})
+    ran_modules = data.get("ran_modules", [])
+    skipped_modules = data.get("skipped_modules", [])
 
     return render_template(
         "results.html",
         scan_id=scan_id,
-        grouped=dict(grouped),
+        grouped=grouped,
         results=findings,
         ran_modules=ran_modules,
-        skipped_modules=skipped_modules
+        skipped_modules=skipped_modules,
+        module_labels=MODULE_LABELS,
+        module_order=MODULE_ORDER,
     )
 
 
@@ -143,7 +158,7 @@ def download_report(scan_id):
     import io
 
     data = commands.get_results(scan_id)
-    findings = data.get("findings", [])
+    findings = data.get("results", data.get("findings", []))
     target = data.get("target", "Unknown")
 
     sev_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'info': 4}

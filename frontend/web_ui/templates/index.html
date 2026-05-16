@@ -7,78 +7,84 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="home-page">
 <div class="background"></div>
-<nav class="navbar">
-    <a href="/" class="nav-logo">🔍 Vulnerability Scanner</a>
+<nav class="navbar navbar-compact">
+    <a href="/" class="nav-logo">Vulnerability Scanner</a>
 </nav>
-<div class="container">
-    <div class="card home-card">
-        <div class="icon">🛡️</div>
+<div class="container container-compact">
+    <div class="card home-card home-card-compact">
         <h1>Website Vulnerability Scanner</h1>
-        <p class="subtitle">Scan websites for vulnerabilities and monitor security reports instantly.</p>
-        <p class="tagline">Checks TLS/SSL · HTTP Headers · DNS · XSS</p>
+        <p class="subtitle">Scan websites for TLS, headers, DNS, and XSS issues.</p>
 
-        <form action="/submit" method="POST">
-            <div class="input-group">
-                <input type="text" name="url" placeholder="https://example.com" required>
-                <p class="input-hint">e.g. https://yourwebsite.com</p>
+        <form action="/submit" method="POST" class="scan-form">
+            <div class="input-group input-group-compact">
+                <input type="url" name="url" class="url-input" placeholder="https://example.com" required>
             </div>
 
-            <div class="scan-modes">
-                <label class="mode-option active" id="mode-quick">
+            <div class="scan-modes scan-modes-cards">
+                <label class="mode-card active" id="mode-quick">
                     <input type="radio" name="scan_mode" value="quick" checked onchange="onModeChange(this)">
-                    <div class="mode-content">
-                        <span class="mode-title">⚡ Quick Scan</span>
-                        <span class="mode-desc">TLS + HTTP Headers · No verification</span>
-                    </div>
+                    <span class="mode-title">Quick Scan</span>
+                    <span class="mode-desc">TLS, HTTP Headers, DNS — runs in ~30 seconds</span>
                 </label>
-                <label class="mode-option" id="mode-full">
+                <label class="mode-card" id="mode-full">
                     <input type="radio" name="scan_mode" value="full" onchange="onModeChange(this)">
-                    <div class="mode-content">
-                        <span class="mode-title">🔍 Full Scan</span>
-                        <span class="mode-desc">All modules · Domain verification required</span>
-                    </div>
+                    <span class="mode-title">Full Scan</span>
+                    <span class="mode-desc">All checks including XSS — runs in ~60 seconds</span>
                 </label>
-                <label class="mode-option" id="mode-custom">
+                <label class="mode-card" id="mode-custom">
                     <input type="radio" name="scan_mode" value="custom" onchange="onModeChange(this)">
-                    <div class="mode-content">
-                        <span class="mode-title">⚙️ Custom Scan</span>
-                        <span class="mode-desc">Pick your modules</span>
-                    </div>
+                    <span class="mode-title">Custom Scan</span>
+                    <span class="mode-desc">Choose individual scanners</span>
                 </label>
             </div>
 
             <div class="custom-modules" id="customModules">
-                <label class="module-check">
-                    <input type="checkbox" name="modules" value="http_headers" checked>
-                    <span>🔒 HTTP Headers</span>
-                </label>
-                <label class="module-check">
+                <label class="module-pill">
                     <input type="checkbox" name="modules" value="tls" checked>
-                    <span>🔐 TLS / SSL</span>
+                    <span>TLS</span>
                 </label>
-                <label class="module-check">
-                    <input type="checkbox" name="modules" value="dns">
-                    <span>🌐 DNS</span>
+                <label class="module-pill">
+                    <input type="checkbox" name="modules" value="http_headers" checked>
+                    <span>HTTP Headers</span>
                 </label>
-                <label class="module-check">
-                    <input type="checkbox" name="modules" value="xss">
-                    <span>⚠️ XSS <small style="color:#f87171">(requires verification)</small></span>
+                <label class="module-pill">
+                    <input type="checkbox" name="modules" value="dns" checked>
+                    <span>DNS</span>
+                </label>
+                <label class="module-pill">
+                    <input type="checkbox" name="modules" value="xss" onchange="onXssToggle()">
+                    <span>XSS</span>
                 </label>
             </div>
+            <p class="xss-warning" id="xssWarning" style="display:none">
+                XSS scan submits test data to your site. Only scan sites you own.
+            </p>
 
-            <button type="submit">Start Security Scan</button>
+            <button type="submit" class="submit-btn">Start Security Scan</button>
         </form>
     </div>
 </div>
 
 <script>
 function onModeChange(radio) {
-    document.querySelectorAll('.mode-option').forEach(el => el.classList.remove('active'));
-    radio.closest('.mode-option').classList.add('active');
+    document.querySelectorAll('.mode-card').forEach(el => el.classList.remove('active'));
+    radio.closest('.mode-card').classList.add('active');
     const custom = document.getElementById('customModules');
     custom.style.display = radio.value === 'custom' ? 'grid' : 'none';
+    if (radio.value !== 'custom') {
+        document.getElementById('xssWarning').style.display = 'none';
+    } else {
+        onXssToggle();
+    }
+}
+
+function onXssToggle() {
+    const xssChecked = document.querySelector('input[name="modules"][value="xss"]').checked;
+    const customSelected = document.querySelector('input[name="scan_mode"][value="custom"]').checked;
+    document.getElementById('xssWarning').style.display =
+        customSelected && xssChecked ? 'block' : 'none';
 }
 </script>
 </body>

@@ -8,11 +8,16 @@ def submit_scan(url):
     return submit_scan_with_type(url, "quick")
 
 
-def submit_scan_with_type(url, scan_type):
+def submit_scan_with_type(url, scan_mode, modules=None):
     payload = {
         "target": url,
-        "scan_type": scan_type
+        "scan_mode": scan_mode,
     }
+    if modules:
+        payload["modules"] = modules
+    elif scan_mode and "," in scan_mode:
+        payload["modules"] = [m.strip() for m in scan_mode.split(",")]
+        payload["scan_mode"] = "custom"
     try:
         response = requests.post(f"{BASE_URL}/scans/", json=payload)
         if response.status_code != 200:
@@ -38,4 +43,4 @@ def get_status(scan_id):
 
 
 def check_status(scan_id):
-    return get_status(scan_id)  
+    return get_status(scan_id)
