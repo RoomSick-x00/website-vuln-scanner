@@ -1,2 +1,5 @@
 flask
 requests
+reportlab
+dnspython
+cryptography

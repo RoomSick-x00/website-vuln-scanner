@@ -1,9 +1,15 @@
+import os
 from celery import Celery
+
+# REDIS_URL can be set via environment variable.
+# Local development defaults to redis://localhost:6379/0
+# Docker sets this via docker-compose.yml e.g. REDIS_URL=redis://redis:6380/0
+redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 app = Celery(
     "website_vuln_scanner",
-    broker="redis://localhost:6380/0",
-    backend="redis://localhost:6380/0",
+    broker=redis_url,
+    backend=redis_url,
     include=["tasks.scan_tasks", "workers.processor"],
 )
 
@@ -15,7 +21,10 @@ app.conf.update(
     enable_utc=True,
     task_track_started=True,
     result_expires=3600,
-)     
+)
 
-# celery -A tasks.celery_app:app worker --loglevel=info --pool=solo   
+# To run locally:
+# celery -A tasks.celery_app worker --loglevel=info
 #
+# To run with solo pool (Windows, no multiprocessing):
+# celery -A tasks.celery_app:app worker --loglevel=info --pool=solo

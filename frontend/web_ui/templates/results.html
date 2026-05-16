@@ -3,53 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Results</title>
-
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Scan Results</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-
 <body>
-
 <div class="background"></div>
-
 <nav class="navbar">
-    🔍 Vulnerability Scanner
+    <a href="/" class="nav-logo">🔍 Vulnerability Scanner</a>
 </nav>
 
-<div class="container">
-
-    <div class="card">
-
-        <h1>
-            Scan Results
-        </h1>
+<div class="results-container">
+    <div class="results-header">
+        <h1>Scan Results</h1>
 
         {% if results %}
+        {% set critical = results | selectattr('severity', 'equalto', 'critical') | list %}
+        {% set high     = results | selectattr('severity', 'equalto', 'high')     | list %}
+        {% set medium   = results | selectattr('severity', 'equalto', 'medium')   | list %}
+        {% set low      = results | selectattr('severity', 'equalto', 'low')      | list %}
+        {% set info     = results | selectattr('severity', 'equalto', 'info')     | list %}
 
-            <ul>
+        <div class="severity-summary">
+            <span class="sev-pill sev-critical">🔴 Critical: {{ critical | length }}</span>
+            <span class="sev-pill sev-high">🟠 High: {{ high | length }}</span>
+            <span class="sev-pill sev-medium">🟡 Medium: {{ medium | length }}</span>
+            <span class="sev-pill sev-low">🔵 Low: {{ low | length }}</span>
+            <span class="sev-pill sev-info">⚪ Info: {{ info | length }}</span>
+        </div>
 
-            {% for result in results %}
+        <a class="btn-pdf" href="/report/{{ scan_id }}">⬇ Download PDF Report</a>
 
-                <li>
-                    {{ result }}
-                </li>
+        {% set vuln_findings = results | rejectattr('severity', 'equalto', 'info') | list %}
+        {% set info_findings = results | selectattr('severity', 'equalto', 'info') | list %}
 
-            {% endfor %}
-
-            </ul>
-
+        {% if vuln_findings %}
+        <h2 class="section-title">⚠️ Vulnerabilities Found</h2>
+        {% for r in vuln_findings %}
+        <div class="finding-card border-{{ r.severity | lower }}">
+            <div class="finding-top">
+                <span class="badge badge-{{ r.severity | lower }}">{{ r.severity }}</span>
+                <span class="finding-issue">{{ r.issue }}</span>
+            </div>
+            <div class="finding-body">
+                <p><span class="label">Evidence:</span> {{ r.evidence }}</p>
+                {% if r.remediation %}
+                <div class="remediation-box">
+                    🔧 <span>{{ r.remediation }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
         {% else %}
-
-            <p>
-                No vulnerabilities found.
-            </p>
-
+        <div class="no-vulns">✅ No vulnerabilities detected</div>
         {% endif %}
 
+        {% if info_findings %}
+        <details class="info-section">
+            <summary class="info-summary">ℹ️ Passing Checks ({{ info_findings | length }})</summary>
+            {% for r in info_findings %}
+            <div class="finding-card border-info">
+                <div class="finding-top">
+                    <span class="badge badge-info">info</span>
+                    <span class="finding-issue">{{ r.issue }}</span>
+                </div>
+                <div class="finding-body">
+                    <p><span class="label">Evidence:</span> {{ r.evidence }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        </details>
+        {% endif %}
+
+        {% else %}
+        <div class="no-vulns">✅ No vulnerabilities found.</div>
+        {% endif %}
     </div>
-
 </div>
-
 </body>
 </html>

@@ -21,3 +21,27 @@ and exposes structured reports via API or CLI/Web UI.
 - `deployment/` → Dockerfiles + docker-compose
 - `docs/` → Architecture, DFD, workflow diagrams
 - `tests/` → Unit + integration tests 
+
+
+## How to run using without Docker(on powershell)?
+# Starting redis server.
+- wsl
+- redis-server
+
+# Starting backend server(uvicorn)
+- cd "C:\Users\mailp\OneDrive\Desktop\Project V\website-vuln-scanner\backend"
+- $env:DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/scanner_db"
+- $env:PYTHONPATH = "C:\Users\mailp\OneDrive\Desktop\Project V\website-vuln-scanner"
+- uvicorn app.main:app --reload
+
+# Starting Celery 
+- cd "C:\Users\mailp\OneDrive\Desktop\Project V\website-vuln-scanner"
+- $env:PYTHONPATH = "C:\Users\mailp\OneDrive\Desktop\Project V\website-vuln-scanner;C:\Users\mailp\OneDrive\Desktop\Project V\website-vuln-scanner\backend"
+- $env:DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/scanner_db"
+- celery -A tasks.celery_app worker --loglevel=info --pool=solo
+
+# Starting Frontend server:
+- cd "C:\Users\mailp\OneDrive\Desktop\Project V\website-vuln-scanner\frontend\web_ui"
+- $env:PYTHONPATH = "C:\Users\mailp\OneDrive\Desktop\Project V\website-vuln-scanner"
+- $env:BACKEND_URL = "http://localhost:8000"
+- python app.py
