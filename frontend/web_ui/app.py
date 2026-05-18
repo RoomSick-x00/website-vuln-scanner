@@ -26,6 +26,12 @@ def generate_verify_token(domain):
     return "vuln-verify-" + hashlib.sha256(domain.encode()).hexdigest()[:16]
 
 
+def target_display(target):
+    if not target:
+        return "target"
+    return extract_domain(target)
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -79,7 +85,12 @@ def submit_scan():
     if "id" not in result:
         return f"Backend response: {result}"
 
-    return render_template("status.html", scan_id=result["id"], target=url)
+    return render_template(
+        "status.html",
+        scan_id=result["id"],
+        target=url,
+        target_display=target_display(url),
+    )
 
 
 @app.route("/api/verify-domain")
@@ -116,13 +127,25 @@ def start_scan():
         return result["error"]
     if "id" not in result:
         return f"Backend response: {result}"
-    return render_template("status.html", scan_id=result["id"], target=url)
+    return render_template(
+        "status.html",
+        scan_id=result["id"],
+        target=url,
+        target_display=target_display(url),
+    )
 
 
 @app.route("/status/<scan_id>")
 def status(scan_id):
     response = commands.check_status(scan_id)
-    return render_template("status.html", scan_id=scan_id, status=response["status"])
+    target = response.get("target", "")
+    return render_template(
+        "status.html",
+        scan_id=scan_id,
+        status=response["status"],
+        target=target,
+        target_display=target_display(target),
+    )
 
 
 MODULE_LABELS = {
@@ -134,6 +157,16 @@ MODULE_LABELS = {
 
 
 MODULE_ORDER = ["tls", "http_headers", "dns", "xss"]
+
+DEFAULT_REMEDIATION = {
+    "dns": (
+        "Investigate your DNS resolver configuration and try the scan again. "
+        "These errors suggest a DNS lookup timeout or resolver-level failure."
+    ),
+    "tls": "Review the TLS finding and update your certificate, protocol, or cipher configuration as needed.",
+    "http_headers": "Review the affected HTTP response header and add or tighten the recommended security policy.",
+    "xss": "Validate and encode untrusted input before reflecting it in responses.",
+}
 
 
 def _label_modules(modules):
@@ -159,6 +192,25 @@ def _compute_risk(findings):
     return "B+", "Minor issues", len(vulns)
 
 
+def _severity_counts(findings):
+    counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+    for finding in findings:
+        sev = finding.get("severity", "info").lower()
+        if sev in counts:
+            counts[sev] += 1
+    return counts
+
+
+def _ensure_remediation(finding):
+    if finding.get("severity", "").lower() == "info" or finding.get("remediation"):
+        return
+    module = finding.get("module_name") or finding.get("task_type") or "unknown"
+    finding["remediation"] = DEFAULT_REMEDIATION.get(
+        module,
+        "Investigate this finding and validate the affected configuration before rescanning.",
+    )
+
+
 def _module_tab_stats(grouped):
     """Per-module counts for tab badges (excludes info)."""
     stats = {}
@@ -170,6 +222,34 @@ def _module_tab_stats(grouped):
                 counts[sev] += 1
         stats[module] = counts
     return stats
+
+
+def _severity_summary_text(counts):
+    parts = []
+    labels = (("high", "High"), ("medium", "Medium"), ("low", "Low"))
+    for key, label in labels:
+        count = counts.get(key, 0)
+        if count:
+            parts.append(f"{count} {label}")
+    return ", ".join(parts)
+
+
+def _sort_grouped_findings(grouped):
+    sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+    for items in grouped.values():
+        items.sort(key=lambda f: sev_order.get(f.get("severity", "info").lower(), 5))
+
+
+def _priority_groups(priority_actions):
+    groups = []
+    lookup = {}
+    for item in priority_actions:
+        module = item.get("module_name") or item.get("task_type") or "unknown"
+        if module not in lookup:
+            lookup[module] = {"module": module, "items": []}
+            groups.append(lookup[module])
+        lookup[module]["items"].append(item)
+    return groups
 
 
 def _prepare_findings_for_display(findings, grouped):
@@ -186,6 +266,7 @@ def _prepare_findings_for_display(findings, grouped):
             module = module_lookup.get((finding.get("issue"), finding.get("evidence")))
             if module:
                 finding["module_name"] = module
+        _ensure_remediation(finding)
 
     issue_lookup = {
         (
@@ -203,6 +284,7 @@ def _prepare_findings_for_display(findings, grouped):
             if not finding.get("_issue_id"):
                 finding["_issue_id"] = f"finding-{fallback_idx}"
                 fallback_idx += 1
+            _ensure_remediation(finding)
 
     actionable = [
         f for f in findings
@@ -229,12 +311,19 @@ def results(scan_id):
     ran_modules = data.get("ran_modules", [])
     skipped_modules = data.get("skipped_modules", [])
     target = data.get("target", "")
+    _sort_grouped_findings(grouped)
 
     active_modules = [m for m in MODULE_ORDER if m in grouped]
     domain_display = extract_domain(target) if target else "Unknown"
     risk_grade, risk_label, vuln_count = _compute_risk(findings)
+    severity_counts = _severity_counts(findings)
     tab_stats = _module_tab_stats(grouped)
+    tab_summary = {
+        module: _severity_summary_text(counts)
+        for module, counts in tab_stats.items()
+    }
     priority_actions = _prepare_findings_for_display(findings, grouped)
+    priority_groups = _priority_groups(priority_actions)
 
     return render_template(
         "results.html",
@@ -253,8 +342,11 @@ def results(scan_id):
         risk_grade=risk_grade,
         risk_label=risk_label,
         vuln_count=vuln_count,
+        severity_counts=severity_counts,
         tab_stats=tab_stats,
+        tab_summary=tab_summary,
         priority_actions=priority_actions,
+        priority_groups=priority_groups,
     )
 
 

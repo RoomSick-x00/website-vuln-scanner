@@ -26,6 +26,14 @@
             <span class="risk-meta">
                 <span class="risk-label">{{ risk_label }}</span>
                 <span class="risk-count">{{ vuln_count }} issue{{ 's' if vuln_count != 1 else '' }} found</span>
+                {% if vuln_count %}
+                <span class="risk-breakdown">
+                    {% if severity_counts.critical %}<span class="risk-breakdown-critical">{{ severity_counts.critical }} Critical</span>{% endif %}
+                    {% if severity_counts.high %}<span class="risk-breakdown-high">{{ severity_counts.high }} High</span>{% endif %}
+                    {% if severity_counts.medium %}<span class="risk-breakdown-medium">{{ severity_counts.medium }} Medium</span>{% endif %}
+                    {% if severity_counts.low %}<span class="risk-breakdown-low">{{ severity_counts.low }} Low</span>{% endif %}
+                </span>
+                {% endif %}
             </span>
         </div>
 
@@ -72,13 +80,23 @@
         <section class="priority-actions" aria-label="Priority actions">
             <h2>Fix These First</h2>
             <div class="priority-list">
-                {% for item in priority_actions %}
+                {% for group in priority_groups %}
+                <div class="priority-group">
+                {% if priority_groups | length > 1 or group['items'] | length > 1 %}
+                <div class="priority-group-label">{{ tab_labels.get(group['module'], group['module'] | replace('_', ' ') | title) }} ({{ group['items'] | length }} issue{{ 's' if group['items'] | length != 1 else '' }})</div>
+                {% endif %}
+                {% for item in group['items'] %}
                 {% set item_module = item.get('module_name') or item.get('task_type') or 'unknown' %}
                 <a class="priority-row" href="#{{ item.get('_issue_id') }}" data-priority-tab="{{ item_module }}">
-                    <span class="priority-dot priority-{{ item.severity | lower }}" aria-hidden="true"></span>
+                    <span class="priority-severity priority-{{ item.severity | lower }}">
+                        <span class="priority-dot" aria-hidden="true"></span>
+                        {{ item.severity | upper }}
+                    </span>
                     <span class="priority-issue">{{ item.issue }}</span>
                     <span class="priority-module">{{ tab_labels.get(item_module, item_module | replace('_', ' ') | title) }}</span>
                 </a>
+                {% endfor %}
+                </div>
                 {% endfor %}
             </div>
         </section>
@@ -100,6 +118,7 @@
 
         {% if ran_modules %}
         <div class="results-findings">
+        <div class="tab-bar-wrapper">
         <div class="tab-bar" role="tablist">
             {% set defined_order = ['tls', 'http_headers', 'dns', 'xss'] %}
             {% set ordered_modules = [] %}
@@ -141,6 +160,7 @@
             </button>
             {% endfor %}
         </div>
+        </div>
 
         <div class="tab-panels">
             {% for module in ordered_modules %}
@@ -155,7 +175,7 @@
             >
                 <p class="filter-empty-msg" hidden></p>
                 {% if vuln_findings %}
-                <p class="panel-issue-count" data-total="{{ vuln_findings | length }}">Showing {{ vuln_findings | length }} issue{{ 's' if vuln_findings | length != 1 else '' }} in this category</p>
+                <p class="panel-issue-count" data-total="{{ vuln_findings | length }}" data-summary="{{ tab_summary.get(module, '') }}">Showing {{ vuln_findings | length }} issue{{ 's' if vuln_findings | length != 1 else '' }}{% if tab_summary.get(module) %} ({{ tab_summary.get(module) }}){% endif %} in this category</p>
                 {% for r in vuln_findings %}
                 <div id="{{ r.get('_issue_id') }}" class="finding-card sev-bg-{{ r.severity | lower }} border-{{ r.severity | lower }}" data-severity="{{ r.severity | lower }}">
                     <div class="finding-top">
@@ -165,7 +185,7 @@
                     <div class="finding-body">
                         <p class="evidence-block"><span class="meta-label">Evidence</span> {{ r.evidence }}</p>
                         {% if r.remediation %}
-                        <div class="remediation-box">
+                        <div class="remediation-box fix-block">
                             <span class="remediation-label">Fix</span>
                             <code class="remediation-text">{{ r.remediation }}</code>
                             <button type="button" class="copy-fix-btn" data-copy="{{ r.remediation }}" title="Copy fix" aria-label="Copy fix to clipboard">Copy</button>
@@ -260,8 +280,10 @@
         const issueCount = panel.querySelector('.panel-issue-count');
         if (issueCount) {
             const total = issueCount.getAttribute('data-total');
+            const summary = issueCount.getAttribute('data-summary');
             if (total) {
-                issueCount.textContent = 'Showing ' + total + ' issue' + (total === '1' ? '' : 's') + ' in this category';
+                issueCount.textContent = 'Showing ' + total + ' issue' + (total === '1' ? '' : 's') +
+                    (summary ? ' (' + summary + ')' : '') + ' in this category';
             }
             issueCount.style.display = '';
         }

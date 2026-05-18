@@ -45,3 +45,22 @@ cd "C:\Users\mailp\OneDrive\Desktop\Project V\website-vuln-scanner\frontend\web_
 $env:PYTHONPATH = "C:\Users\mailp\OneDrive\Desktop\Project V\website-vuln-scanner"
 $env:BACKEND_URL = "http://localhost:8000"
 python app.py
+
+## Temporary verify bypass
+
+Domain verification is currently forced to succeed for UI testing in
+`frontend/web_ui/templates/verify.html` inside `verifyDomain()`.
+
+To disable the bypass before shipping, remove:
+
+```js
+const verificationResult = { success: true };
+```
+
+Then uncomment the real `/api/verify-domain` fetch block directly below it.
+
+For screenshots, append one of these query params to the verify page URL:
+
+- `?verify_state=checking` keeps the button in the checking state.
+- `?verify_state=failed` shows the failed state.
+- Omit the param to use the temporary success bypass.

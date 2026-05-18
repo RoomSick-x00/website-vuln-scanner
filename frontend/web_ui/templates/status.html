@@ -16,13 +16,17 @@
 <div class="container status-container">
     <div class="card status-card status-card-expanded">
         <h2 class="status-heading">
-            {% if target %}Scanning {{ target }}{% else %}Scanning target{% endif %}
+            {% if target %}
+            Scanning <span title="{{ target }}">{{ target_display or target }}</span>
+            {% else %}
+            Scanning target
+            {% endif %}
         </h2>
 
         <div class="progress-block">
             <div class="progress-bar-header">
                 <span class="progress-label">Progress</span>
-                <span class="progress-percent" id="progressPercent">0%</span>
+                <span class="progress-percent" id="progressPercent">0% &middot; 0s elapsed</span>
             </div>
             <div class="progress-bar-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progressBarWrap">
                 <div class="progress-bar-fill" id="progressBar"></div>
@@ -63,18 +67,22 @@
 
 <script>
 const scanId = "{{ scan_id }}";
-const STEP_ORDER = ['connect', 'tls', 'headers', 'dns', 'finalize'];
-const CONTEXT_MESSAGES = [
-    'Checking TLS certificate chain...',
-    'Analyzing HTTP response headers...',
-    'Running DNS record inspection...',
-    'Validating security header policies...',
-    'Compiling findings into your report...'
+const STEP_CONFIG = [
+    { id: 'connect', message: 'Connecting to target...', duration: 3000, progress: 16 },
+    { id: 'tls', message: 'Running TLS/SSL checks...', duration: 6000, progress: 38 },
+    { id: 'headers', message: 'Analyzing HTTP response headers...', duration: 7000, progress: 62 },
+    { id: 'dns', message: 'Running DNS record inspection...', duration: 8000, progress: 84 },
+    { id: 'finalize', message: 'Compiling security report...', duration: 4000, progress: 96 }
 ];
+const STEP_ORDER = STEP_CONFIG.map(function (step) { return step.id; });
+const FINAL_STEP_MIN_MS = 2500;
 
 let pollCount = 0;
-let contextIndex = 0;
 const startTime = Date.now();
+let scanCompleted = false;
+let redirectScheduled = false;
+let terminalStatus = null;
+let isQueued = false;
 
 function setStepState(stepId, state) {
     const el = document.querySelector('.scan-step[data-step="' + stepId + '"]');
@@ -83,30 +91,86 @@ function setStepState(stepId, state) {
     el.classList.add(state);
 }
 
+function stepTiming(elapsedMs) {
+    let consumed = 0;
+    for (let i = 0; i < STEP_CONFIG.length; i += 1) {
+        const step = STEP_CONFIG[i];
+        if (elapsedMs < consumed + step.duration) {
+            return { index: i, intoStep: elapsedMs - consumed };
+        }
+        consumed += step.duration;
+    }
+    return {
+        index: STEP_CONFIG.length - 1,
+        intoStep: STEP_CONFIG[STEP_CONFIG.length - 1].duration
+    };
+}
+
+function progressForStep(timing) {
+    const previousProgress = timing.index === 0 ? 8 : STEP_CONFIG[timing.index - 1].progress;
+    const currentStep = STEP_CONFIG[timing.index];
+    const stepProgress = Math.min(1, timing.intoStep / currentStep.duration);
+    const eased = 1 - Math.pow(1 - stepProgress, 2);
+    return Math.floor(previousProgress + ((currentStep.progress - previousProgress) * eased));
+}
+
+function scheduleRedirect(statusText) {
+    if (redirectScheduled) return;
+    redirectScheduled = true;
+    STEP_ORDER.forEach(function (id) { setStepState(id, 'done'); });
+
+    const bar = document.getElementById('progressBar');
+    const pctEl = document.getElementById('progressPercent');
+    const barWrap = document.getElementById('progressBarWrap');
+    if (bar) bar.style.width = '100%';
+    if (pctEl) pctEl.textContent = '100% · ' + elapsedSeconds() + 's elapsed';
+    if (barWrap) barWrap.setAttribute('aria-valuenow', '100');
+    if (statusText) statusText.textContent = 'Scan complete. Redirecting to results...';
+    setTimeout(function () {
+        window.location.href = '/results/' + scanId;
+    }, 1200);
+}
+
 function updateProgressFromElapsed() {
-    const elapsed = (Date.now() - startTime) / 1000;
-    let pct = Math.min(92, Math.floor(elapsed * 2.2));
-    if (pollCount > 8) pct = Math.min(95, pct + 5);
+    if (terminalStatus === 'failed') return;
+
+    const timing = stepTiming(Date.now() - startTime);
+    const activeStep = STEP_CONFIG[timing.index];
+    let pct = progressForStep(timing);
+    if (pollCount > 8) pct = Math.min(activeStep.progress, pct + 2);
 
     const bar = document.getElementById('progressBar');
     const pctEl = document.getElementById('progressPercent');
     const barWrap = document.getElementById('progressBarWrap');
     if (bar) bar.style.width = Math.max(pct, 8) + '%';
-    if (pctEl) pctEl.textContent = pct + '%';
+    if (pctEl) pctEl.textContent = pct + '% · ' + elapsedSeconds() + 's elapsed';
     if (barWrap) barWrap.setAttribute('aria-valuenow', String(pct));
 
-    const stepIndex = Math.min(STEP_ORDER.length - 1, Math.floor(elapsed / 12));
-    STEP_ORDER.forEach(function (id, i) {
-        if (i < stepIndex) setStepState(id, 'done');
-        else if (i === stepIndex) setStepState(id, 'active');
-        else setStepState(id, 'pending');
+    STEP_CONFIG.forEach(function (step, i) {
+        if (i < timing.index) setStepState(step.id, 'done');
+        else if (i === timing.index) setStepState(step.id, 'active');
+        else setStepState(step.id, 'pending');
     });
+
+    const statusText = document.getElementById('status-text');
+    if (statusText && !isQueued) statusText.textContent = activeStep.message;
+
+    const finalStepReady = timing.index >= STEP_CONFIG.length - 1 && timing.intoStep >= FINAL_STEP_MIN_MS;
+    if (scanCompleted && finalStepReady) scheduleRedirect(statusText);
 }
 
-function rotateContext() {
-    const el = document.getElementById('status-text');
-    el.textContent = CONTEXT_MESSAGES[contextIndex % CONTEXT_MESSAGES.length];
-    contextIndex += 1;
+function elapsedSeconds() {
+    return Math.max(0, Math.floor((Date.now() - startTime) / 1000));
+}
+
+function setQueuedState() {
+    isQueued = true;
+    const statusText = document.getElementById('status-text');
+    if (statusText) statusText.textContent = 'Waiting in queue...';
+    STEP_CONFIG.forEach(function (step, i) {
+        if (i === 0) setStepState(step.id, 'active');
+        else setStepState(step.id, 'pending');
+    });
 }
 
 async function checkStatus() {
@@ -119,24 +183,17 @@ async function checkStatus() {
         const statusText = document.getElementById('status-text');
 
         if (data.status === 'QUEUED') {
-            statusText.textContent = 'Waiting in queue...';
-            setStepState('connect', 'active');
+            setQueuedState();
         } else if (data.status === 'RUNNING') {
-            rotateContext();
+            isQueued = false;
+            updateProgressFromElapsed();
         } else if (data.status === 'COMPLETED' || data.status === 'completed') {
-            STEP_ORDER.forEach(function (id) { setStepState(id, 'done'); });
-            const bar = document.getElementById('progressBar');
-            const pctEl = document.getElementById('progressPercent');
-            const barWrap = document.getElementById('progressBarWrap');
-            if (bar) bar.style.width = '100%';
-            if (pctEl) pctEl.textContent = '100%';
-            if (barWrap) barWrap.setAttribute('aria-valuenow', '100');
-            statusText.textContent = 'Scan complete. Redirecting to results...';
-            setTimeout(function () {
-                window.location.href = '/results/' + scanId;
-            }, 1200);
+            isQueued = false;
+            scanCompleted = true;
+            updateProgressFromElapsed();
             return;
         } else if (data.status === 'FAILED' || data.status === 'failed') {
+            terminalStatus = 'failed';
             statusText.textContent = 'Scan failed. Please try again.';
             return;
         } else {
@@ -148,7 +205,6 @@ async function checkStatus() {
 }
 
 setInterval(checkStatus, 2500);
-setInterval(rotateContext, 4000);
 setInterval(updateProgressFromElapsed, 800);
 checkStatus();
 updateProgressFromElapsed();

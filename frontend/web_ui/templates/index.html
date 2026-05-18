@@ -22,7 +22,7 @@
         <form action="/submit" method="POST" class="scan-form" id="scanForm">
             <div class="input-group input-group-compact url-field-wrap">
                 <input type="text" name="url" id="urlInput" class="url-input" placeholder="https://example.com" autocomplete="url" required>
-                <span class="url-validation-icon" id="urlValidationIcon" aria-hidden="true" data-tooltip="Valid URL"></span>
+                <span class="url-validation-icon" id="urlValidationIcon" role="img" aria-hidden="true" data-tooltip="Valid URL format" title="Valid URL" aria-label="URL is valid"></span>
                 <p class="url-error" id="urlError" role="alert"></p>
                 <p class="input-hint">Enter a full URL including https://</p>
             </div>
@@ -66,19 +66,19 @@
                             </span>
                         </div>
                         <div class="custom-modules">
-                            <button type="button" class="module-btn selected" data-module="tls" data-label="TLS">
+                            <button type="button" class="module-btn selected" data-module="tls" data-label="TLS" aria-pressed="true">
                                 <span class="module-check" aria-hidden="true"></span>
                                 TLS
                             </button>
-                            <button type="button" class="module-btn selected" data-module="http_headers" data-label="HTTP Headers">
+                            <button type="button" class="module-btn selected" data-module="http_headers" data-label="HTTP Headers" aria-pressed="true">
                                 <span class="module-check" aria-hidden="true"></span>
                                 HTTP Headers
                             </button>
-                            <button type="button" class="module-btn selected" data-module="dns" data-label="DNS">
+                            <button type="button" class="module-btn selected" data-module="dns" data-label="DNS" aria-pressed="true">
                                 <span class="module-check" aria-hidden="true"></span>
                                 DNS
                             </button>
-                            <button type="button" class="module-btn" data-module="xss" data-label="XSS">
+                            <button type="button" class="module-btn" data-module="xss" data-label="XSS" aria-pressed="false">
                                 <span class="module-check" aria-hidden="true"></span>
                                 XSS
                             </button>
@@ -95,7 +95,12 @@
             </p>
 
             <details class="what-we-check">
-                <summary>What we check</summary>
+                <summary>
+                    <span>What we check</span>
+                    <svg class="summary-chevron" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M9 18l6-6-6-6" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                </summary>
                 <ul>
                     <li><strong>TLS/SSL</strong> — certificate validity, protocol versions, cipher strength</li>
                     <li><strong>HTTP Headers</strong> — security headers, cookie flags, CORS policies</li>
@@ -105,7 +110,7 @@
             </details>
 
             <div class="cta-block">
-                <button type="submit" class="submit-btn" id="submitBtn">Start Security Scan</button>
+                <button type="submit" class="submit-btn cta-button" id="submitBtn">Start Security Scan</button>
                 <p class="trust-line">We don't store URLs or scan results. Scans run in an isolated environment.</p>
             </div>
         </form>
@@ -167,6 +172,7 @@ function updateUrlValidation() {
     urlValidationIcon.className = 'url-validation-icon';
     urlValidationIcon.setAttribute('aria-hidden', 'true');
     urlValidationIcon.removeAttribute('aria-label');
+    urlValidationIcon.removeAttribute('title');
     urlError.textContent = '';
 
     if (!raw) {
@@ -179,7 +185,9 @@ function updateUrlValidation() {
         urlValidationIcon.textContent = '';
         urlValidationIcon.className = 'url-validation-icon valid';
         urlValidationIcon.setAttribute('aria-hidden', 'false');
-        urlValidationIcon.setAttribute('aria-label', 'Valid URL');
+        urlValidationIcon.setAttribute('aria-label', 'URL is valid');
+        urlValidationIcon.setAttribute('title', 'Valid URL');
+        urlValidationIcon.setAttribute('data-tooltip', 'Valid URL format');
         return true;
     }
 
@@ -187,7 +195,8 @@ function updateUrlValidation() {
     urlValidationIcon.textContent = '';
     urlValidationIcon.className = 'url-validation-icon invalid';
     urlValidationIcon.setAttribute('aria-hidden', 'false');
-    urlValidationIcon.setAttribute('aria-label', 'Invalid URL');
+    urlValidationIcon.setAttribute('aria-label', 'URL is invalid');
+    urlValidationIcon.setAttribute('title', 'Invalid URL');
     if (!/^https?:\/\//i.test(raw)) {
         urlError.textContent = 'Include https:// (e.g. https://example.com)';
     } else {
@@ -241,7 +250,7 @@ function updateSubmitState() {
         submitBtn.textContent = 'Start Full Scan';
     } else if (modules.length) {
         const names = modules.map(function (m) { return MODULE_LABELS[m]; }).join(' + ');
-        submitBtn.textContent = 'Start Custom Scan (' + names + ')';
+        submitBtn.innerHTML = 'Start Custom Scan <span class="scanner-detail">(' + names + ')</span>';
     } else {
         submitBtn.textContent = 'Start Custom Scan';
     }
@@ -284,6 +293,7 @@ document.querySelectorAll('.module-btn').forEach(function (btn) {
             onModeChange(document.querySelector('input[name="scan_mode"][value="custom"]'));
         }
         btn.classList.toggle('selected');
+        btn.setAttribute('aria-pressed', btn.classList.contains('selected') ? 'true' : 'false');
         syncModuleInputs();
         onXssToggle();
         updateCustomEstimate();
@@ -294,6 +304,7 @@ document.querySelectorAll('.module-btn').forEach(function (btn) {
 document.getElementById('selectAllModules').addEventListener('click', function () {
     document.querySelectorAll('.module-btn').forEach(function (btn) {
         btn.classList.add('selected');
+        btn.setAttribute('aria-pressed', 'true');
     });
     syncModuleInputs();
     onXssToggle();
@@ -304,6 +315,7 @@ document.getElementById('selectAllModules').addEventListener('click', function (
 document.getElementById('clearModules').addEventListener('click', function () {
     document.querySelectorAll('.module-btn').forEach(function (btn) {
         btn.classList.remove('selected');
+        btn.setAttribute('aria-pressed', 'false');
     });
     syncModuleInputs();
     onXssToggle();

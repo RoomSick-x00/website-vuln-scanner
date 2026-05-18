@@ -13,6 +13,30 @@ class DNSScanner(BaseScanner):
     name = "dns"
     display_name = "DNS Configuration"
     tier = "passive"
+
+    def _dns_error_finding(
+        self,
+        *,
+        issue: str,
+        domain: str,
+        record_type: str,
+        lookup_name: str,
+        error: Exception,
+    ) -> Finding:
+        error_type = type(error).__name__
+        return self._finding(
+            issue=issue,
+            evidence=(
+                f"{record_type} lookup for {lookup_name} failed while scanning {domain}. "
+                f"Resolver error: {error_type}: {error}"
+            ),
+            severity="low",
+            remediation=(
+                f"Investigate DNS resolution for {lookup_name} ({record_type}). "
+                "Check authoritative nameservers, resolver reachability, firewall rules, "
+                "and retry the scan from a network with reliable DNS access."
+            ),
+        )
     
     def scan(self, target: str, timeout: int = 10) -> list[Finding]:
         findings = []
@@ -117,8 +141,15 @@ class DNSScanner(BaseScanner):
         except Exception as e:
             findings.append(self._finding(
                 issue="SPF check error",
-                evidence=str(e),
+                evidence=(
+                    f"TXT lookup for {domain} failed during SPF inspection. "
+                    f"Resolver error: {type(e).__name__}: {e}"
+                ),
                 severity="low",
+                remediation=(
+                    "Investigate TXT record resolution for the root domain. "
+                    "If DNS is reachable, add or correct the SPF TXT record."
+                ),
             ))
 
         return findings
@@ -219,10 +250,12 @@ class DNSScanner(BaseScanner):
                 score_penalty=25,
             ))
         except Exception as e:
-            findings.append(self._finding(
+            findings.append(self._dns_error_finding(
                 issue="DMARC check error",
-                evidence=str(e),
-                severity="low",
+                domain=domain,
+                record_type="TXT",
+                lookup_name=f"_dmarc.{domain}",
+                error=e,
             ))
 
         return findings
@@ -263,10 +296,12 @@ class DNSScanner(BaseScanner):
                 score_penalty=50,
             ))
         except Exception as e:
-            findings.append(self._finding(
+            findings.append(self._dns_error_finding(
                 issue="DNSSEC check error",
-                evidence=str(e),
-                severity="low",
+                domain=domain,
+                record_type="DNSKEY",
+                lookup_name=domain,
+                error=e,
             ))
 
         return findings
@@ -310,10 +345,12 @@ class DNSScanner(BaseScanner):
                 remediation="Verify the domain name is correct.",
             ))
         except Exception as e:
-            findings.append(self._finding(
+            findings.append(self._dns_error_finding(
                 issue="CAA check error",
-                evidence=str(e),
-                severity="low",
+                domain=domain,
+                record_type="CAA",
+                lookup_name=domain,
+                error=e,
             ))
 
         return findings
@@ -355,10 +392,12 @@ class DNSScanner(BaseScanner):
                 score_penalty=50,
             ))
         except Exception as e:
-            findings.append(self._finding(
+            findings.append(self._dns_error_finding(
                 issue="MX check error",
-                evidence=str(e),
-                severity="low",
+                domain=domain,
+                record_type="MX",
+                lookup_name=domain,
+                error=e,
             ))
 
         return findings

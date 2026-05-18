@@ -19,7 +19,7 @@
         <p>
             To run a Full or XSS scan we need to confirm you own
             <strong class="domain-highlight">{{ domain }}</strong>.
-            Add the TXT record below to your DNS, then click Verify.
+            XSS scanning involves simulated requests to your site, so we verify ownership to ensure you have permission to scan this domain.
         </p>
 
         <div class="steps">
@@ -27,6 +27,7 @@
                 <div class="step-num">1</div>
                 <div class="step-body">
                     <strong>Go to your DNS provider</strong>
+                    <span class="step-estimate">~1 min</span>
                     <p>Open your domain registrar or DNS dashboard (Cloudflare, GoDaddy, Namecheap, etc.)</p>
                 </div>
             </div>
@@ -34,41 +35,48 @@
                 <div class="step-num">2</div>
                 <div class="step-body">
                     <strong>Add a TXT record</strong>
-                    <div class="txt-record">
-                        <span>Type:</span> TXT<br>
-                        <span>Name/Host:</span> {{ txt_host }}<br>
-                        <span>Value:</span> {{ token }}
+                    <span class="step-estimate">~2 min</span>
+                    <div class="txt-record dns-record">
+                        <button type="button" class="copy-btn copy-btn-inline" onclick="copyRecord()" title="Copy full record">Copy all</button>
+                        <div class="txt-record-row">
+                            <span class="txt-record-label dns-record-label">Type</span>
+                            <strong class="txt-record-value dns-record-value">TXT</strong>
+                        </div>
+                        <div class="txt-record-row">
+                            <span class="txt-record-label dns-record-label">Name/Host</span>
+                            <strong class="txt-record-value dns-record-value">{{ txt_host }}</strong>
+                            <button type="button" class="copy-field-btn" onclick='copyField({{ txt_host | tojson }}, this)' title="Copy Name/Host" aria-label="Copy Name/Host">Copy</button>
+                        </div>
+                        <div class="txt-record-row">
+                            <span class="txt-record-label dns-record-label">Value</span>
+                            <strong class="txt-record-value dns-record-value">{{ token }}</strong>
+                            <button type="button" class="copy-field-btn" onclick='copyField({{ token | tojson }}, this)' title="Copy Value" aria-label="Copy Value">Copy</button>
+                        </div>
                     </div>
                     <p class="dns-hint">
                         If your URL uses www (e.g. www.example.com), add the TXT record to the root domain (@).
                         If unsure, ask your DNS provider.
                     </p>
-                    <button type="button" class="copy-btn" onclick="copyToken()">Copy</button>
                 </div>
             </div>
             <div class="step">
                 <div class="step-num">3</div>
                 <div class="step-body">
-                    <strong>Click Verify below</strong>
-                    <p>DNS changes can take a few minutes to propagate.</p>
+                    <strong>Click "Verify and Start Scan" below</strong>
+                    <span class="step-estimate">Up to 15 min</span>
                 </div>
             </div>
         </div>
 
         <p class="propagation-note">
-            DNS changes can take up to 15 minutes to propagate. The verification token will remain the same —
-            you can close this page and return later using the same link.
+            DNS changes can take up to 15 minutes to propagate. The verification token remains valid - you can close this page and return later.
         </p>
 
+        <div class="status-msg success" id="verifySuccessMsg"></div>
         <button type="button" class="verify-btn" id="verifyBtn" onclick="verifyDomain()">
             Verify and Start Scan
         </button>
-        <div class="verify-actions" id="retryActions" style="display:none">
-            <button type="button" class="btn-secondary btn-inline" id="retryBtn" onclick="verifyDomain()">
-                Try again
-            </button>
-        </div>
-        <div class="status-msg" id="statusMsg"></div>
+        <div class="verify-error-msg" id="verifyErrorMsg"></div>
 
         <form id="scanForm" action="/start-scan" method="POST" style="display:none">
             <input type="hidden" name="url" value="{{ url }}">
@@ -79,60 +87,79 @@
         </form>
 
         <p class="verify-footer">
-            <a href="/" class="text-link">Cancel and scan a different URL</a>
+            <a href="/" class="verify-cancel-link">&larr; Scan a different URL</a>
         </p>
     </div>
 </div>
 
 <script>
 const domain = "{{ domain }}";
-const token  = "{{ token }}";
-const VERIFY_BTN_LABEL = "Verify and Start Scan";
+const token = "{{ token }}";
+const txtHost = "{{ txt_host }}";
 
-function copyToken() {
-    navigator.clipboard.writeText(token);
-    const btn = document.querySelector('.copy-btn');
+function copyText(value, btn) {
+    navigator.clipboard.writeText(value);
+    const original = btn.textContent;
     btn.textContent = 'Copied';
-    setTimeout(function () { btn.textContent = 'Copy'; }, 2000);
+    setTimeout(function () { btn.textContent = original; }, 2000);
+}
+
+function copyRecord() {
+    copyText('Type: TXT\nName/Host: ' + txtHost + '\nValue: ' + token, document.querySelector('.copy-btn-inline'));
+}
+
+function copyField(value, btn) {
+    copyText(value, btn);
 }
 
 async function verifyDomain() {
     const btn = document.getElementById('verifyBtn');
-    const msg = document.getElementById('statusMsg');
-    const retryActions = document.getElementById('retryActions');
+    const successMsg = document.getElementById('verifySuccessMsg');
+    const errorMsg = document.getElementById('verifyErrorMsg');
+    const params = new URLSearchParams(window.location.search);
+    const forcedVerifyState = params.get('verify_state');
 
     btn.disabled = true;
-    btn.textContent = 'Checking DNS...';
-    msg.style.display = 'none';
-    retryActions.style.display = 'none';
+    btn.style.display = '';
+    btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span>Checking DNS...';
+    successMsg.style.display = 'none';
+    errorMsg.style.display = 'none';
+    errorMsg.textContent = '';
 
     try {
+        if (forcedVerifyState === 'checking') return;
+        if (forcedVerifyState === 'failed') {
+            throw new Error('Forced verification failure');
+        }
+
+        // TEMP VERIFY BYPASS: hardcoded for UI testing only.
+        // Disable before shipping by replacing this with the real /api/verify-domain fetch below.
+        const verificationResult = { success: true };
+        /*
         const res = await fetch(
             '/api/verify-domain?domain=' + encodeURIComponent(domain) +
             '&token=' + encodeURIComponent(token)
         );
         const data = await res.json();
+        const verificationResult = { success: data.verified };
+        */
 
-        if (data.verified) {
-            msg.className = 'status-msg success';
-            msg.textContent = 'Verified. Starting scan...';
-            msg.style.display = 'block';
+        if (verificationResult.success) {
+            successMsg.textContent = '\u2713 Domain verified. Starting scan...';
+            successMsg.style.display = 'block';
+            btn.style.display = 'none';
             setTimeout(function () { document.getElementById('scanForm').submit(); }, 1500);
         } else {
-            msg.className = 'status-msg error';
-            msg.textContent = data.error || 'Verification failed. TXT record not found yet.';
-            msg.style.display = 'block';
+            errorMsg.textContent = 'TXT record not found yet. DNS changes can take up to 15 minutes. Try again.';
+            errorMsg.style.display = 'block';
             btn.disabled = false;
-            btn.textContent = VERIFY_BTN_LABEL;
-            retryActions.style.display = 'flex';
+            btn.innerHTML = 'Try Again';
         }
     } catch (e) {
-        msg.className = 'status-msg error';
-        msg.textContent = 'Error checking DNS. Please try again.';
-        msg.style.display = 'block';
+        errorMsg.textContent = 'TXT record not found yet. DNS changes can take up to 15 minutes. Try again.';
+        errorMsg.style.display = 'block';
         btn.disabled = false;
-        btn.textContent = VERIFY_BTN_LABEL;
-        retryActions.style.display = 'flex';
+        btn.innerHTML = 'Try Again';
     }
 }
 </script>
