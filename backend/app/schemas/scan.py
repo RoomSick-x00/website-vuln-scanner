@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 from app.core.enums import ScanStatus
@@ -20,7 +20,8 @@ class ScanResponse(BaseModel):
     created_at: datetime
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
-    findings: Optional[List[dict]] = []
+    findings: Optional[List[dict]] = Field(default_factory=list)
+    completed_modules: Optional[List[str]] = Field(default_factory=list)
     verified: bool = False
 
     class Config:
@@ -36,6 +37,7 @@ class ScanDetailResponse(BaseModel):
     skipped_modules: List[str]
     results: List[dict]
     grouped: dict[str, List[dict]]
+    completed_modules: List[str] = Field(default_factory=list)
     verified: bool = False
 
 

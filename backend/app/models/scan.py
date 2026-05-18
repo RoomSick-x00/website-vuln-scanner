@@ -16,5 +16,6 @@ class Scan(Base):
     started_at = Column(DateTime(timezone=True), nullable=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)
     findings = Column(JSON, nullable=True, default=list)
+    completed_modules = Column(JSON, nullable=True, default=list)
     verification_token = Column(String, nullable=True)
     verified = Column(Boolean, default=False)

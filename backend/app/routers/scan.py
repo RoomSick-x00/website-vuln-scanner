@@ -53,6 +53,7 @@ def _build_scan_detail(scan: Scan) -> ScanDetailResponse:
         skipped_modules=skipped_modules,
         results=findings,
         grouped=group_findings(findings),
+        completed_modules=list(scan.completed_modules or []),
         verified=bool(scan.verified),
     )
 
@@ -62,6 +63,8 @@ def create_scan(scan: ScanCreate, db: Session = Depends(get_db)):
     scan_id = str(uuid4())
     raw_mode = _effective_scan_mode(scan)
     scan_modules = resolve_scan_modules(raw_mode, scan.modules)
+    if not scan_modules:
+        raise HTTPException(status_code=422, detail="Select at least one valid scanner module.")
     domain = extract_domain(scan.target)
 
     if scan.modules:
@@ -84,6 +87,7 @@ def create_scan(scan: ScanCreate, db: Session = Depends(get_db)):
         scan_mode=stored_mode,
         scan_type=raw_mode,
         status=ScanStatus.QUEUED,
+        completed_modules=[],
         verification_token=verification_token,
         verified=not needs_verification,
     )
