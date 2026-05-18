@@ -140,6 +140,38 @@ def _label_modules(modules):
     return [MODULE_LABELS.get(m, m) for m in modules]
 
 
+def _compute_risk(findings):
+    """Return (grade, label, vuln_count) from non-info findings."""
+    sev_weights = {"critical": 40, "high": 25, "medium": 12, "low": 5}
+    vulns = [f for f in findings if f.get("severity", "").lower() != "info"]
+    score = sum(sev_weights.get(f.get("severity", "").lower(), 0) for f in vulns)
+
+    if not vulns:
+        return "A", "Clean", 0
+    if score >= 80:
+        return "F", "Critical risk", len(vulns)
+    if score >= 50:
+        return "D", "High risk", len(vulns)
+    if score >= 25:
+        return "C", "Moderate risk", len(vulns)
+    if score >= 10:
+        return "B", "Low risk", len(vulns)
+    return "B+", "Minor issues", len(vulns)
+
+
+def _module_tab_stats(grouped):
+    """Per-module counts for tab badges (excludes info)."""
+    stats = {}
+    for module, items in grouped.items():
+        counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+        for f in items:
+            sev = f.get("severity", "info").lower()
+            if sev in counts:
+                counts[sev] += 1
+        stats[module] = counts
+    return stats
+
+
 @app.route("/results/<scan_id>")
 def results(scan_id):
     data = commands.get_results(scan_id)
@@ -150,12 +182,18 @@ def results(scan_id):
     grouped = data.get("grouped", {})
     ran_modules = data.get("ran_modules", [])
     skipped_modules = data.get("skipped_modules", [])
+    target = data.get("target", "")
 
     active_modules = [m for m in MODULE_ORDER if m in grouped]
+    domain_display = extract_domain(target) if target else "Unknown"
+    risk_grade, risk_label, vuln_count = _compute_risk(findings)
+    tab_stats = _module_tab_stats(grouped)
 
     return render_template(
         "results.html",
         scan_id=scan_id,
+        target=target,
+        domain_display=domain_display,
         grouped=grouped,
         results=findings,
         ran_modules=ran_modules,
@@ -165,6 +203,10 @@ def results(scan_id):
         active_modules=active_modules,
         module_labels=MODULE_LABELS,
         module_order=MODULE_ORDER,
+        risk_grade=risk_grade,
+        risk_label=risk_label,
+        vuln_count=vuln_count,
+        tab_stats=tab_stats,
     )
 
 
