@@ -22,7 +22,7 @@
         <form action="/submit" method="POST" class="scan-form" id="scanForm">
             <div class="input-group input-group-compact url-field-wrap">
                 <input type="text" name="url" id="urlInput" class="url-input" placeholder="https://example.com" autocomplete="url" required>
-                <span class="url-validation-icon" id="urlValidationIcon" aria-hidden="true"></span>
+                <span class="url-validation-icon" id="urlValidationIcon" aria-hidden="true" data-tooltip="Valid URL"></span>
                 <p class="url-error" id="urlError" role="alert"></p>
                 <p class="input-hint">Enter a full URL including https://</p>
             </div>
@@ -164,6 +164,9 @@ function updateUrlValidation() {
     const raw = urlInput.value.trim();
     urlInput.classList.remove('url-valid', 'url-invalid');
     urlValidationIcon.textContent = '';
+    urlValidationIcon.className = 'url-validation-icon';
+    urlValidationIcon.setAttribute('aria-hidden', 'true');
+    urlValidationIcon.removeAttribute('aria-label');
     urlError.textContent = '';
 
     if (!raw) {
@@ -175,12 +178,16 @@ function updateUrlValidation() {
         urlInput.classList.add('url-valid');
         urlValidationIcon.textContent = '';
         urlValidationIcon.className = 'url-validation-icon valid';
+        urlValidationIcon.setAttribute('aria-hidden', 'false');
+        urlValidationIcon.setAttribute('aria-label', 'Valid URL');
         return true;
     }
 
     urlInput.classList.add('url-invalid');
     urlValidationIcon.textContent = '';
     urlValidationIcon.className = 'url-validation-icon invalid';
+    urlValidationIcon.setAttribute('aria-hidden', 'false');
+    urlValidationIcon.setAttribute('aria-label', 'Invalid URL');
     if (!/^https?:\/\//i.test(raw)) {
         urlError.textContent = 'Include https:// (e.g. https://example.com)';
     } else {

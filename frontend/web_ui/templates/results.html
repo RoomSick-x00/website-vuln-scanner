@@ -43,6 +43,20 @@
             <button type="button" class="sev-pill sev-info sev-pill-sm{% if info | length == 0 %} sev-zero{% endif %}" data-sev="info" aria-pressed="false">Info <strong>{{ info | length }}</strong></button>
         </div>
 
+        {% set defined_order = ['tls', 'http_headers', 'dns', 'xss'] %}
+        {% set ordered_modules = [] %}
+        {% for m in defined_order %}
+            {% if m in ran_modules %}
+                {% set _ = ordered_modules.append(m) %}
+            {% endif %}
+        {% endfor %}
+        {% for m in ran_modules %}
+            {% if m not in defined_order %}
+                {% set _ = ordered_modules.append(m) %}
+            {% endif %}
+        {% endfor %}
+        {% set tab_labels = {'tls': 'TLS/SSL', 'http_headers': 'HTTP Headers', 'dns': 'DNS', 'xss': 'XSS'} %}
+
         <p class="scanner-summary">
             {% if ran_modules_display %}
             <span>Scanners run: {{ ran_modules_display | join(' · ') }}</span>
@@ -54,8 +68,24 @@
             {% endif %}
         </p>
 
+        {% if priority_actions %}
+        <section class="priority-actions" aria-label="Priority actions">
+            <h2>Fix These First</h2>
+            <div class="priority-list">
+                {% for item in priority_actions %}
+                {% set item_module = item.get('module_name') or item.get('task_type') or 'unknown' %}
+                <a class="priority-row" href="#{{ item.get('_issue_id') }}" data-priority-tab="{{ item_module }}">
+                    <span class="priority-dot priority-{{ item.severity | lower }}" aria-hidden="true"></span>
+                    <span class="priority-issue">{{ item.issue }}</span>
+                    <span class="priority-module">{{ tab_labels.get(item_module, item_module | replace('_', ' ') | title) }}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
         <div class="results-actions">
-            <a class="btn-action btn-outline" href="/report/{{ scan_id }}">Download PDF Report</a>
+            <a class="btn-action btn-primary" href="/report/{{ scan_id }}">Download PDF Report</a>
             <a class="btn-action btn-outline" href="/">Scan another URL</a>
         </div>
 
@@ -127,7 +157,7 @@
                 {% if vuln_findings %}
                 <p class="panel-issue-count" data-total="{{ vuln_findings | length }}">Showing {{ vuln_findings | length }} issue{{ 's' if vuln_findings | length != 1 else '' }} in this category</p>
                 {% for r in vuln_findings %}
-                <div class="finding-card sev-bg-{{ r.severity | lower }} border-{{ r.severity | lower }}" data-severity="{{ r.severity | lower }}">
+                <div id="{{ r.get('_issue_id') }}" class="finding-card sev-bg-{{ r.severity | lower }} border-{{ r.severity | lower }}" data-severity="{{ r.severity | lower }}">
                     <div class="finding-top">
                         <span class="badge badge-{{ r.severity | lower }}">{{ r.severity }}</span>
                         <span class="finding-issue">{{ r.issue }}</span>
@@ -154,7 +184,7 @@
                     <details class="info-section info-section-inline">
                         <summary class="info-summary">Show passing checks ({{ info_findings | length }})</summary>
                         {% for r in info_findings %}
-                        <div class="finding-card sev-bg-info border-info finding-card-pass" data-severity="info">
+                        <div id="{{ r.get('_issue_id') }}" class="finding-card sev-bg-info border-info finding-card-pass" data-severity="info">
                             <div class="finding-top">
                                 <span class="badge badge-info">info</span>
                                 <span class="finding-issue">{{ r.issue }}</span>
@@ -173,7 +203,7 @@
                 <details class="info-section module-info-section">
                     <summary class="info-summary">Show passing checks ({{ info_findings | length }})</summary>
                     {% for r in info_findings %}
-                    <div class="finding-card sev-bg-info border-info finding-card-pass" data-severity="info">
+                        <div id="{{ r.get('_issue_id') }}" class="finding-card sev-bg-info border-info finding-card-pass" data-severity="info">
                         <div class="finding-top">
                             <span class="badge badge-info">info</span>
                             <span class="finding-issue">{{ r.issue }}</span>
@@ -353,6 +383,42 @@
             if (panel) panel.classList.add('active');
             if (activeSeverityFilter) applySeverityFilter();
         });
+    });
+
+    document.querySelectorAll('.priority-row').forEach(function (link) {
+        link.addEventListener('click', function (e) {
+            const tabId = link.getAttribute('data-priority-tab');
+            const target = document.querySelector(link.getAttribute('href'));
+            const tab = document.querySelector('.tab-btn[data-tab="' + tabId + '"]');
+            if (tab) tab.click();
+            if (target) {
+                e.preventDefault();
+                setTimeout(function () {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    target.classList.add('finding-card-focus');
+                    setTimeout(function () {
+                        target.classList.remove('finding-card-focus');
+                    }, 1600);
+                }, 50);
+            }
+        });
+    });
+
+    document.querySelectorAll('.remediation-text').forEach(function (el) {
+        const text = el.textContent;
+        const urlPattern = /(https?:\/\/[^\s'")<>]+)/g;
+        if (!urlPattern.test(text)) return;
+        el.innerHTML = text.replace(urlPattern, function (url) {
+            return '%%URL%%' + url + '%%ENDURL%%';
+        }).split(/(%%URL%%.*?%%ENDURL%%)/).map(function (part) {
+            if (part.indexOf('%%URL%%') === 0) {
+                const url = part.replace('%%URL%%', '').replace('%%ENDURL%%', '');
+                return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
+            }
+            return part.replace(/[&<>"']/g, function (char) {
+                return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[char];
+            });
+        }).join('');
     });
 
     document.querySelectorAll('.copy-fix-btn').forEach(function (btn) {

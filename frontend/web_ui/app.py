@@ -172,6 +172,52 @@ def _module_tab_stats(grouped):
     return stats
 
 
+def _prepare_findings_for_display(findings, grouped):
+    """Attach stable DOM ids and return the highest-priority non-info findings."""
+    sev_weights = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+    module_lookup = {}
+    for module, items in grouped.items():
+        for finding in items:
+            module_lookup[(finding.get("issue"), finding.get("evidence"))] = module
+
+    for idx, finding in enumerate(findings, 1):
+        finding["_issue_id"] = f"finding-{idx}"
+        if not finding.get("module_name") and not finding.get("task_type"):
+            module = module_lookup.get((finding.get("issue"), finding.get("evidence")))
+            if module:
+                finding["module_name"] = module
+
+    issue_lookup = {
+        (
+            f.get("module_name") or f.get("task_type") or "unknown",
+            f.get("issue"),
+            f.get("evidence"),
+        ): f.get("_issue_id")
+        for f in findings
+    }
+    fallback_idx = len(findings) + 1
+    for module, items in grouped.items():
+        for finding in items:
+            key = (module, finding.get("issue"), finding.get("evidence"))
+            finding["_issue_id"] = issue_lookup.get(key, finding.get("_issue_id"))
+            if not finding.get("_issue_id"):
+                finding["_issue_id"] = f"finding-{fallback_idx}"
+                fallback_idx += 1
+
+    actionable = [
+        f for f in findings
+        if f.get("severity", "").lower() in sev_weights
+    ]
+    actionable.sort(
+        key=lambda f: (
+            sev_weights.get(f.get("severity", "").lower(), 0),
+            -findings.index(f),
+        ),
+        reverse=True,
+    )
+    return actionable[:3]
+
+
 @app.route("/results/<scan_id>")
 def results(scan_id):
     data = commands.get_results(scan_id)
@@ -188,6 +234,7 @@ def results(scan_id):
     domain_display = extract_domain(target) if target else "Unknown"
     risk_grade, risk_label, vuln_count = _compute_risk(findings)
     tab_stats = _module_tab_stats(grouped)
+    priority_actions = _prepare_findings_for_display(findings, grouped)
 
     return render_template(
         "results.html",
@@ -207,6 +254,7 @@ def results(scan_id):
         risk_label=risk_label,
         vuln_count=vuln_count,
         tab_stats=tab_stats,
+        priority_actions=priority_actions,
     )
 
 
