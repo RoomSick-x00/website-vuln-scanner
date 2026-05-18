@@ -5,50 +5,155 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scanning...</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="status-page app-shell">
 <div class="background"></div>
 <nav class="navbar">
-    <a href="/" class="nav-logo">Vulnerability Scanner</a>
+    <a href="/" class="nav-logo" title="Back to home">Vulnerability Scanner</a>
 </nav>
-<div class="container">
-    <div class="card status-card">
-        <div class="spinner-wrap">
-            <div class="spinner-ring"></div>
+
+{% if target %}
+<p class="scan-target-header">Scanning <strong>{{ target }}</strong></p>
+{% endif %}
+
+<div class="container status-container">
+    <div class="card status-card status-card-expanded">
+        <h2 class="status-heading">Scan in progress</h2>
+
+        <div class="progress-block">
+            <div class="progress-bar-header">
+                <span class="progress-label">Progress</span>
+                <span class="progress-percent" id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progressBarWrap">
+                <div class="progress-bar-fill" id="progressBar"></div>
+            </div>
         </div>
-        <h1 id="status-title">Scanning...</h1>
-        {% if target %}
-        <p class="scan-target">Scanning: <strong>{{ target }}</strong></p>
-        {% endif %}
-        <p id="status-text" class="subtitle">Checking scan status...</p>
-        <p class="wait-hint">This usually takes 30–60 seconds</p>
+
+        <ul class="scan-steps" id="scanSteps" aria-live="polite">
+            <li class="scan-step pending" data-step="connect">
+                <span class="step-indicator" aria-hidden="true"></span>
+                <span class="step-label">Connecting to target</span>
+            </li>
+            <li class="scan-step pending" data-step="tls">
+                <span class="step-indicator" aria-hidden="true"></span>
+                <span class="step-label">Running TLS/SSL checks</span>
+            </li>
+            <li class="scan-step pending" data-step="headers">
+                <span class="step-indicator" aria-hidden="true"></span>
+                <span class="step-label">Analyzing HTTP response headers</span>
+            </li>
+            <li class="scan-step pending" data-step="dns">
+                <span class="step-indicator" aria-hidden="true"></span>
+                <span class="step-label">Running DNS record inspection</span>
+            </li>
+            <li class="scan-step pending" data-step="finalize">
+                <span class="step-indicator" aria-hidden="true"></span>
+                <span class="step-label">Compiling security report</span>
+            </li>
+        </ul>
+
+        <p id="status-text" class="status-context" aria-live="polite">Initializing scan...</p>
+        <p class="wait-hint">This usually takes 30 to 60 seconds</p>
     </div>
+
+    <p class="status-cancel-wrap">
+        <a href="/" class="text-link cancel-scan-link">Cancel scan</a>
+    </p>
 </div>
+
 <script>
 const scanId = "{{ scan_id }}";
+const STEP_ORDER = ['connect', 'tls', 'headers', 'dns', 'finalize'];
+const CONTEXT_MESSAGES = [
+    'Checking TLS certificate chain...',
+    'Analyzing HTTP response headers...',
+    'Running DNS record inspection...',
+    'Validating security header policies...',
+    'Compiling findings into your report...'
+];
+
+let pollCount = 0;
+let contextIndex = 0;
+const startTime = Date.now();
+
+function setStepState(stepId, state) {
+    const el = document.querySelector('.scan-step[data-step="' + stepId + '"]');
+    if (!el) return;
+    el.classList.remove('pending', 'active', 'done');
+    el.classList.add(state);
+}
+
+function updateProgressFromElapsed() {
+    const elapsed = (Date.now() - startTime) / 1000;
+    let pct = Math.min(92, Math.floor(elapsed * 2.2));
+    if (pollCount > 8) pct = Math.min(95, pct + 5);
+
+    const bar = document.getElementById('progressBar');
+    const pctEl = document.getElementById('progressPercent');
+    const barWrap = document.getElementById('progressBarWrap');
+    if (bar) bar.style.width = pct + '%';
+    if (pctEl) pctEl.textContent = pct + '%';
+    if (barWrap) barWrap.setAttribute('aria-valuenow', String(pct));
+
+    const stepIndex = Math.min(STEP_ORDER.length - 1, Math.floor(elapsed / 12));
+    STEP_ORDER.forEach(function (id, i) {
+        if (i < stepIndex) setStepState(id, 'done');
+        else if (i === stepIndex) setStepState(id, 'active');
+        else setStepState(id, 'pending');
+    });
+}
+
+function rotateContext() {
+    const el = document.getElementById('status-text');
+    el.textContent = CONTEXT_MESSAGES[contextIndex % CONTEXT_MESSAGES.length];
+    contextIndex += 1;
+}
+
 async function checkStatus() {
+    pollCount += 1;
+    updateProgressFromElapsed();
+
     try {
-        const response = await fetch(`/api/status/${scanId}`);
+        const response = await fetch('/api/status/' + scanId);
         const data = await response.json();
-        const statusText = document.getElementById("status-text");
-        const title = document.getElementById("status-title");
-        if (data.status === "QUEUED") {
-            statusText.innerText = "Waiting in queue...";
-        } else if (data.status === "RUNNING") {
-            statusText.innerText = "Scanning target website...";
-        } else if (data.status === "COMPLETED" || data.status === "completed") {
-            title.innerText = "Scan Complete!";
-            statusText.innerText = "Redirecting to results...";
-            setTimeout(() => { window.location.href = `/results/${scanId}`; }, 1500);
+        const statusText = document.getElementById('status-text');
+
+        if (data.status === 'QUEUED') {
+            statusText.textContent = 'Waiting in queue...';
+            setStepState('connect', 'active');
+        } else if (data.status === 'RUNNING') {
+            rotateContext();
+        } else if (data.status === 'COMPLETED' || data.status === 'completed') {
+            STEP_ORDER.forEach(function (id) { setStepState(id, 'done'); });
+            const bar = document.getElementById('progressBar');
+            const pctEl = document.getElementById('progressPercent');
+            const barWrap = document.getElementById('progressBarWrap');
+            if (bar) bar.style.width = '100%';
+            if (pctEl) pctEl.textContent = '100%';
+            if (barWrap) barWrap.setAttribute('aria-valuenow', '100');
+            statusText.textContent = 'Scan complete. Redirecting to results...';
+            setTimeout(function () {
+                window.location.href = '/results/' + scanId;
+            }, 1200);
+            return;
+        } else if (data.status === 'FAILED' || data.status === 'failed') {
+            statusText.textContent = 'Scan failed. Please try again.';
+            return;
         } else {
-            statusText.innerText = `Status: ${data.status}`;
+            statusText.textContent = 'Status: ' + data.status;
         }
     } catch (error) {
-        document.getElementById("status-text").innerText = "Error checking scan status";
+        document.getElementById('status-text').textContent = 'Error checking scan status';
     }
 }
-setInterval(checkStatus, 3000);
+
+setInterval(checkStatus, 2500);
+setInterval(rotateContext, 4000);
+setInterval(updateProgressFromElapsed, 800);
 checkStatus();
+updateProgressFromElapsed();
 </script>
 </body>
 </html>
