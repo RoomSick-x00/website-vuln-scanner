@@ -10,4 +10,4 @@ COPY backend/app /app/app
 COPY workers /app/workers
 COPY tasks /app/tasks
 
-CMD ["celery", "-A", "tasks.celery_app:app", "worker", "--loglevel=info"]
+CMD ["celery", "-A", "tasks.celery_app:app", "worker", "--loglevel=info", "--concurrency=2", "--uid=nobody"]
