@@ -5,81 +5,367 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vulnerability Scanner</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="home-page app-shell">
 <div class="background"></div>
-<nav class="navbar">
-    <a href="/" class="nav-logo">🔍 Vulnerability Scanner</a>
+<nav class="navbar navbar-compact">
+    <a href="/" class="nav-logo" title="Back to home">
+        Vulnerability Scanner
+    </a>
 </nav>
-<div class="container">
-    <div class="card home-card">
-        <div class="icon">🛡️</div>
-        <h1>Website Vulnerability Scanner</h1>
-        <p class="subtitle">Scan websites for vulnerabilities and monitor security reports instantly.</p>
-        <p class="tagline">Checks TLS/SSL · HTTP Headers · DNS · XSS</p>
+<div class="container container-compact">
+    <div class="card home-card home-card-compact">
+        <h1>Find security holes before attackers do.</h1>
+        <p class="subtitle">Get a full security report in under 60 seconds.</p>
 
-        <form action="/submit" method="POST">
-            <div class="input-group">
-                <input type="text" name="url" placeholder="https://example.com" required>
-                <p class="input-hint">e.g. https://yourwebsite.com</p>
+        <form action="/submit" method="POST" class="scan-form" id="scanForm">
+            <div class="input-group input-group-compact url-field-wrap">
+                <input type="text" name="url" id="urlInput" class="url-input" placeholder="https://example.com" autocomplete="url" required>
+                <span class="url-validation-icon" id="urlValidationIcon" role="img" aria-hidden="true" data-tooltip="Valid URL format" title="Valid URL" aria-label="URL is valid"></span>
+                <p class="url-error" id="urlError" role="alert"></p>
+                <p class="input-hint">Enter a full URL including https://</p>
             </div>
 
-            <div class="scan-modes">
-                <label class="mode-option active" id="mode-quick">
+            <div class="scan-modes scan-modes-cards" role="radiogroup" aria-label="Scan type">
+                <label class="mode-card active" id="mode-quick">
+                    <span class="mode-radio" aria-hidden="true"></span>
+                    <span class="mode-content">
+                        <span class="mode-title-row">
+                            <span class="mode-title">Quick Scan</span>
+                            <span class="mode-badge">Recommended</span>
+                        </span>
+                        <span class="mode-desc">TLS, HTTP Headers, DNS — ~30 seconds</span>
+                    </span>
                     <input type="radio" name="scan_mode" value="quick" checked onchange="onModeChange(this)">
-                    <div class="mode-content">
-                        <span class="mode-title">⚡ Quick Scan</span>
-                        <span class="mode-desc">TLS + HTTP Headers · No verification</span>
-                    </div>
                 </label>
-                <label class="mode-option" id="mode-full">
+                <label class="mode-card" id="mode-full">
+                    <span class="mode-radio" aria-hidden="true"></span>
+                    <span class="mode-content">
+                        <span class="mode-title">Full Scan</span>
+                        <span class="mode-desc">All checks including XSS — ~60 seconds</span>
+                    </span>
                     <input type="radio" name="scan_mode" value="full" onchange="onModeChange(this)">
-                    <div class="mode-content">
-                        <span class="mode-title">🔍 Full Scan</span>
-                        <span class="mode-desc">All modules · Domain verification required</span>
-                    </div>
                 </label>
-                <label class="mode-option" id="mode-custom">
-                    <input type="radio" name="scan_mode" value="custom" onchange="onModeChange(this)">
-                    <div class="mode-content">
-                        <span class="mode-title">⚙️ Custom Scan</span>
-                        <span class="mode-desc">Pick your modules</span>
+                <label class="mode-card mode-card-custom" id="mode-custom">
+                    <div class="mode-card-row">
+                        <span class="mode-radio" aria-hidden="true"></span>
+                        <span class="mode-content">
+                            <span class="mode-title">Custom Scan</span>
+                            <span class="mode-desc" id="customModeDesc">Choose individual scanners</span>
+                        </span>
+                        <input type="radio" name="scan_mode" value="custom" onchange="onModeChange(this)">
+                    </div>
+                    <div class="custom-modules-panel" id="customModules">
+                        <div class="custom-modules-header">
+                            <span class="custom-modules-label">Scanners</span>
+                            <span class="custom-modules-actions">
+                                <button type="button" class="text-btn" id="selectAllModules">Select all</button>
+                                <span class="text-btn-sep">·</span>
+                                <button type="button" class="text-btn" id="clearModules">Clear</button>
+                            </span>
+                        </div>
+                        <div class="custom-modules">
+                            <button type="button" class="module-btn selected" data-module="tls" data-label="TLS" aria-pressed="true">
+                                <span class="module-check" aria-hidden="true"></span>
+                                TLS
+                            </button>
+                            <button type="button" class="module-btn selected" data-module="http_headers" data-label="HTTP Headers" aria-pressed="true">
+                                <span class="module-check" aria-hidden="true"></span>
+                                HTTP Headers
+                            </button>
+                            <button type="button" class="module-btn selected" data-module="dns" data-label="DNS" aria-pressed="true">
+                                <span class="module-check" aria-hidden="true"></span>
+                                DNS
+                            </button>
+                            <button type="button" class="module-btn" data-module="xss" data-label="XSS" aria-pressed="false">
+                                <span class="module-check" aria-hidden="true"></span>
+                                XSS
+                            </button>
+                        </div>
+                        <p class="custom-estimate" id="customEstimate"></p>
+                        <p class="module-empty-warning" id="moduleEmptyWarning">Select at least one scanner to continue.</p>
                     </div>
                 </label>
             </div>
 
-            <div class="custom-modules" id="customModules">
-                <label class="module-check">
-                    <input type="checkbox" name="modules" value="http_headers" checked>
-                    <span>🔒 HTTP Headers</span>
-                </label>
-                <label class="module-check">
-                    <input type="checkbox" name="modules" value="tls" checked>
-                    <span>🔐 TLS / SSL</span>
-                </label>
-                <label class="module-check">
-                    <input type="checkbox" name="modules" value="dns">
-                    <span>🌐 DNS</span>
-                </label>
-                <label class="module-check">
-                    <input type="checkbox" name="modules" value="xss">
-                    <span>⚠️ XSS <small style="color:#f87171">(requires verification)</small></span>
-                </label>
-            </div>
+            <div id="moduleInputs"></div>
+            <p class="xss-warning" id="xssWarning" style="display:none">
+                XSS scan submits test data to your site. Only scan sites you own.
+            </p>
 
-            <button type="submit">Start Security Scan</button>
+            <details class="what-we-check">
+                <summary>
+                    <span>What we check</span>
+                    <svg class="summary-chevron" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M9 18l6-6-6-6" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                </summary>
+                <ul>
+                    <li><strong>TLS/SSL</strong> — certificate validity, protocol versions, cipher strength</li>
+                    <li><strong>HTTP Headers</strong> — security headers, cookie flags, CORS policies</li>
+                    <li><strong>DNS</strong> — SPF, DMARC, DNSSEC, record hygiene</li>
+                    <li><strong>XSS</strong> — reflected input handling (Full &amp; Custom scans only)</li>
+                </ul>
+            </details>
+
+            <div class="cta-block">
+                <button type="submit" class="submit-btn cta-button" id="submitBtn">Start Security Scan</button>
+                <p class="trust-line">Scans run in an isolated environment.</p>
+            </div>
         </form>
     </div>
 </div>
 
 <script>
-function onModeChange(radio) {
-    document.querySelectorAll('.mode-option').forEach(el => el.classList.remove('active'));
-    radio.closest('.mode-option').classList.add('active');
-    const custom = document.getElementById('customModules');
-    custom.style.display = radio.value === 'custom' ? 'grid' : 'none';
+const MODULE_LABELS = {
+    tls: 'TLS',
+    http_headers: 'HTTP Headers',
+    dns: 'DNS',
+    xss: 'XSS'
+};
+const MODULE_SECONDS = { tls: 10, http_headers: 15, dns: 10, xss: 25 };
+
+const urlInput = document.getElementById('urlInput');
+const urlError = document.getElementById('urlError');
+const urlValidationIcon = document.getElementById('urlValidationIcon');
+const submitBtn = document.getElementById('submitBtn');
+
+function getSelectedModules() {
+    return Array.from(document.querySelectorAll('.module-btn.selected'))
+        .map(function (btn) { return btn.getAttribute('data-module'); });
 }
+
+function syncModuleInputs() {
+    const container = document.getElementById('moduleInputs');
+    container.innerHTML = '';
+    getSelectedModules().forEach(function (mod) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'modules';
+        input.value = mod;
+        container.appendChild(input);
+    });
+}
+
+function isValidUrl(value) {
+    if (!value || !value.trim()) return false;
+    try {
+        const u = new URL(value.includes('://') ? value : 'https://' + value);
+        return u.protocol === 'https:' || u.protocol === 'http:';
+    } catch (e) {
+        return false;
+    }
+}
+
+function normalizeUrl(value) {
+    const trimmed = value.trim();
+    if (!trimmed) return trimmed;
+    if (!/^https?:\/\//i.test(trimmed)) return 'https://' + trimmed;
+    return trimmed;
+}
+
+function updateUrlValidation() {
+    const raw = urlInput.value.trim();
+    urlInput.classList.remove('url-valid', 'url-invalid');
+    urlValidationIcon.textContent = '';
+    urlValidationIcon.className = 'url-validation-icon';
+    urlValidationIcon.setAttribute('aria-hidden', 'true');
+    urlValidationIcon.removeAttribute('aria-label');
+    urlValidationIcon.removeAttribute('title');
+    urlError.textContent = '';
+
+    if (!raw) {
+        return false;
+    }
+
+    const normalized = normalizeUrl(raw);
+    if (isValidUrl(normalized)) {
+        urlInput.classList.add('url-valid');
+        urlValidationIcon.textContent = '';
+        urlValidationIcon.className = 'url-validation-icon valid';
+        urlValidationIcon.setAttribute('aria-hidden', 'false');
+        urlValidationIcon.setAttribute('aria-label', 'URL is valid');
+        urlValidationIcon.setAttribute('title', 'Valid URL');
+        urlValidationIcon.setAttribute('data-tooltip', 'Valid URL format');
+        return true;
+    }
+
+    urlInput.classList.add('url-invalid');
+    urlValidationIcon.textContent = '';
+    urlValidationIcon.className = 'url-validation-icon invalid';
+    urlValidationIcon.setAttribute('aria-hidden', 'false');
+    urlValidationIcon.setAttribute('aria-label', 'URL is invalid');
+    urlValidationIcon.setAttribute('title', 'Invalid URL');
+    if (!/^https?:\/\//i.test(raw)) {
+        urlError.textContent = 'Include https:// (e.g. https://example.com)';
+    } else {
+        urlError.textContent = 'Enter a valid website URL';
+    }
+    return false;
+}
+
+function estimateCustomSeconds(modules) {
+    if (!modules.length) return 0;
+    return modules.reduce(function (sum, m) {
+        return sum + (MODULE_SECONDS[m] || 10);
+    }, 0);
+}
+
+function updateCustomEstimate() {
+    const estimateEl = document.getElementById('customEstimate');
+    const descEl = document.getElementById('customModeDesc');
+    const isCustom = document.querySelector('input[name="scan_mode"][value="custom"]').checked;
+    const modules = getSelectedModules();
+
+    if (!isCustom) {
+        estimateEl.textContent = '';
+        return;
+    }
+
+    const secs = estimateCustomSeconds(modules);
+    if (modules.length) {
+        estimateEl.textContent = 'Estimated scan time: ~' + secs + ' seconds';
+        descEl.textContent = modules.map(function (m) { return MODULE_LABELS[m]; }).join(' + ');
+    } else {
+        estimateEl.textContent = '';
+        descEl.textContent = 'Choose individual scanners';
+    }
+}
+
+function updateSubmitState() {
+    const mode = document.querySelector('input[name="scan_mode"]:checked').value;
+    const modules = getSelectedModules();
+    const urlOk = updateUrlValidation();
+    const customEmpty = mode === 'custom' && modules.length === 0;
+
+    document.getElementById('moduleEmptyWarning').style.display =
+        mode === 'custom' && modules.length === 0 ? 'block' : 'none';
+
+    submitBtn.disabled = !urlOk || customEmpty;
+
+    if (mode === 'quick') {
+        submitBtn.textContent = 'Start Quick Scan';
+    } else if (mode === 'full') {
+        submitBtn.textContent = 'Start Full Scan';
+    } else if (modules.length) {
+        const names = modules.map(function (m) { return MODULE_LABELS[m]; }).join(' + ');
+        submitBtn.innerHTML = 'Start Custom Scan <span class="scanner-detail">(' + names + ')</span>';
+    } else {
+        submitBtn.textContent = 'Start Custom Scan';
+    }
+}
+
+function onModeChange(radio) {
+    document.querySelectorAll('.mode-card').forEach(function (el) {
+        el.classList.remove('active');
+    });
+    const card = radio.closest('.mode-card');
+    card.classList.add('active');
+
+    const customPanel = document.getElementById('customModules');
+    const isCustom = radio.value === 'custom';
+    customPanel.classList.toggle('expanded', isCustom);
+
+    if (!isCustom) {
+        document.getElementById('xssWarning').style.display = 'none';
+    } else {
+        syncModuleInputs();
+        onXssToggle();
+    }
+    updateCustomEstimate();
+    updateSubmitState();
+}
+
+function onXssToggle() {
+    const modules = getSelectedModules();
+    const customSelected = document.querySelector('input[name="scan_mode"][value="custom"]').checked;
+    document.getElementById('xssWarning').style.display =
+        customSelected && modules.indexOf('xss') !== -1 ? 'block' : 'none';
+}
+
+document.querySelectorAll('.module-btn').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        const isCustom = document.querySelector('input[name="scan_mode"][value="custom"]').checked;
+        if (!isCustom) {
+            document.querySelector('input[name="scan_mode"][value="custom"]').checked = true;
+            onModeChange(document.querySelector('input[name="scan_mode"][value="custom"]'));
+        }
+        btn.classList.toggle('selected');
+        btn.setAttribute('aria-pressed', btn.classList.contains('selected') ? 'true' : 'false');
+        syncModuleInputs();
+        onXssToggle();
+        updateCustomEstimate();
+        updateSubmitState();
+    });
+});
+
+document.getElementById('selectAllModules').addEventListener('click', function () {
+    document.querySelectorAll('.module-btn').forEach(function (btn) {
+        btn.classList.add('selected');
+        btn.setAttribute('aria-pressed', 'true');
+    });
+    syncModuleInputs();
+    onXssToggle();
+    updateCustomEstimate();
+    updateSubmitState();
+});
+
+document.getElementById('clearModules').addEventListener('click', function () {
+    document.querySelectorAll('.module-btn').forEach(function (btn) {
+        btn.classList.remove('selected');
+        btn.setAttribute('aria-pressed', 'false');
+    });
+    syncModuleInputs();
+    onXssToggle();
+    updateCustomEstimate();
+    updateSubmitState();
+});
+
+urlInput.addEventListener('input', updateSubmitState);
+urlInput.addEventListener('blur', function () {
+    if (urlInput.value.trim() && !/^https?:\/\//i.test(urlInput.value.trim())) {
+        urlInput.value = normalizeUrl(urlInput.value);
+    }
+    updateSubmitState();
+});
+
+document.getElementById('scanForm').addEventListener('submit', function (e) {
+    const raw = urlInput.value.trim();
+    if (!raw) {
+        e.preventDefault();
+        return;
+    }
+    urlInput.value = normalizeUrl(raw);
+
+    const isCustom = document.querySelector('input[name="scan_mode"][value="custom"]').checked;
+    if (isCustom) {
+        syncModuleInputs();
+        if (getSelectedModules().length === 0) {
+            e.preventDefault();
+            return;
+        }
+    }
+    if (!isValidUrl(urlInput.value)) {
+        e.preventDefault();
+        updateUrlValidation();
+    }
+});
+
+(function initFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const url = params.get('url');
+    const mode = params.get('mode');
+    if (url) urlInput.value = url;
+    if (mode === 'full') {
+        const full = document.querySelector('input[name="scan_mode"][value="full"]');
+        full.checked = true;
+        onModeChange(full);
+    }
+    syncModuleInputs();
+    updateSubmitState();
+})();
 </script>
 </body>
 </html>

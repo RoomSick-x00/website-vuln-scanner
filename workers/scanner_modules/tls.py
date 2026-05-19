@@ -507,13 +507,13 @@ class TLSScanner(BaseScanner):
             ts.close()
 
             if any(kex in cipher_name.upper() for kex in ("ECDHE", "DHE")):
-                findings.append(self.self._finding(
+                findings.append(self._finding(
                     "Forward secrecy supported",
                     f"Server negotiated PFS cipher: {cipher_name}",
                     "info",
                 ))
             else:
-                findings.append(self.self._finding(
+                findings.append(self._finding(
                     "Forward secrecy may not be supported",
                     f"Negotiated cipher does not use ECDHE/DHE: {cipher_name}",
                     "medium",

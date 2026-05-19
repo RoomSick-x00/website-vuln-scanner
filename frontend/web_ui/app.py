@@ -14,8 +14,22 @@ sys.path.append(os.path.abspath(os.path.join(BASE_DIR, "..", "cli")))
 import commands_cli as commands
 
 
+def extract_domain(target: str) -> str:
+    """Match backend app.scan_utils.extract_domain for consistent verification."""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(target if "://" in target else f"https://{target}")
+    return (parsed.netloc or target).lower().removeprefix("www.")
+
+
 def generate_verify_token(domain):
     return "vuln-verify-" + hashlib.sha256(domain.encode()).hexdigest()[:16]
+
+
+def target_display(target):
+    if not target:
+        return "target"
+    return extract_domain(target)
 
 
 @app.route("/")
@@ -34,42 +48,49 @@ def submit_scan():
     url = request.form["url"]
     scan_mode = request.form.get("scan_mode", "quick")
 
-    # Custom mode — build scan_type from checkboxes
     if scan_mode == "custom":
         selected = request.form.getlist("modules")
         if not selected:
             return "Please select at least one module."
-        scan_type = ",".join(selected)
+        scan_type = "custom"
+        modules = selected
         needs_verify = "xss" in selected
     elif scan_mode == "full":
         scan_type = "full"
+        modules = None
         needs_verify = True
     else:
         scan_type = "quick"
+        modules = None
         needs_verify = False
 
-    # Extract domain from URL
-    from urllib.parse import urlparse
-    domain = urlparse(url).netloc or url
+    domain = extract_domain(url)
+    txt_host = f"_vuln-verify.{domain}"
 
     if needs_verify:
         token = generate_verify_token(domain)
         return render_template(
             "verify.html",
             domain=domain,
+            txt_host=txt_host,
             token=token,
             url=url,
-            scan_type=scan_type
+            scan_type=scan_type,
+            modules=modules or [],
         )
 
-    # No verification needed — submit directly
-    result = commands.submit_scan_with_type(url, scan_type)
+    result = commands.submit_scan_with_type(url, scan_type, modules=modules)
     if "error" in result:
         return result["error"]
     if "id" not in result:
         return f"Backend response: {result}"
 
-    return render_template("status.html", scan_id=result["id"], target=url)
+    return render_template(
+        "status.html",
+        scan_id=result["id"],
+        target=url,
+        target_display=target_display(url),
+    )
 
 
 @app.route("/api/verify-domain")
@@ -78,8 +99,10 @@ def api_verify_domain():
     token = request.args.get("token")
     if not domain or not token:
         return jsonify({"verified": False, "error": "Missing params"})
+    domain = extract_domain(domain)
+    txt_host = f"_vuln-verify.{domain}"
     try:
-        answers = dns.resolver.resolve(domain, "TXT")
+        answers = dns.resolver.resolve(txt_host, "TXT")
         for r in answers:
             for s in r.strings:
                 if token.encode() in s or token in s.decode(errors="ignore"):
@@ -92,43 +115,238 @@ def api_verify_domain():
 @app.route("/start-scan", methods=["POST"])
 def start_scan():
     url = request.form["url"]
-    scan_type = request.form["scan_type"]
-    result = commands.submit_scan_with_type(url, scan_type)
+    scan_type = request.form.get("scan_type", "quick")
+    modules = request.form.getlist("modules")
+    if not modules and "," in scan_type:
+        modules = [m.strip() for m in scan_type.split(",")]
+        scan_type = "custom"
+    result = commands.submit_scan_with_type(
+        url, scan_type, modules=modules if modules else None
+    )
     if "error" in result:
         return result["error"]
     if "id" not in result:
         return f"Backend response: {result}"
-    return render_template("status.html", scan_id=result["id"], target=url)
+    return render_template(
+        "status.html",
+        scan_id=result["id"],
+        target=url,
+        target_display=target_display(url),
+    )
 
 
 @app.route("/status/<scan_id>")
 def status(scan_id):
     response = commands.check_status(scan_id)
-    return render_template("status.html", scan_id=scan_id, status=response["status"])
+    target = response.get("target", "")
+    return render_template(
+        "status.html",
+        scan_id=scan_id,
+        status=response["status"],
+        target=target,
+        target_display=target_display(target),
+    )
+
+
+MODULE_LABELS = {
+    "tls": "TLS/SSL",
+    "http_headers": "HTTP Headers",
+    "dns": "DNS",
+    "xss": "XSS",
+}
+
+
+MODULE_ORDER = ["tls", "http_headers", "dns", "xss"]
+
+DEFAULT_REMEDIATION = {
+    "dns": (
+        "Investigate your DNS resolver configuration and try the scan again. "
+        "These errors suggest a DNS lookup timeout or resolver-level failure."
+    ),
+    "tls": "Review the TLS finding and update your certificate, protocol, or cipher configuration as needed.",
+    "http_headers": "Review the affected HTTP response header and add or tighten the recommended security policy.",
+    "xss": "Validate and encode untrusted input before reflecting it in responses.",
+}
+
+
+def _label_modules(modules):
+    return [MODULE_LABELS.get(m, m) for m in modules]
+
+
+def _compute_risk(findings):
+    """Return (grade, label, vuln_count) from non-info findings."""
+    sev_weights = {"critical": 40, "high": 25, "medium": 12, "low": 5}
+    vulns = [f for f in findings if f.get("severity", "").lower() != "info"]
+    score = sum(sev_weights.get(f.get("severity", "").lower(), 0) for f in vulns)
+
+    if not vulns:
+        return "A", "Clean", 0
+    if score >= 80:
+        return "F", "Critical risk", len(vulns)
+    if score >= 50:
+        return "D", "High risk", len(vulns)
+    if score >= 25:
+        return "C", "Moderate risk", len(vulns)
+    if score >= 10:
+        return "B", "Low risk", len(vulns)
+    return "B+", "Minor issues", len(vulns)
+
+
+def _severity_counts(findings):
+    counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+    for finding in findings:
+        sev = finding.get("severity", "info").lower()
+        if sev in counts:
+            counts[sev] += 1
+    return counts
+
+
+def _ensure_remediation(finding):
+    if finding.get("severity", "").lower() == "info" or finding.get("remediation"):
+        return
+    module = finding.get("module_name") or finding.get("task_type") or "unknown"
+    finding["remediation"] = DEFAULT_REMEDIATION.get(
+        module,
+        "Investigate this finding and validate the affected configuration before rescanning.",
+    )
+
+
+def _module_tab_stats(grouped):
+    """Per-module counts for tab badges (excludes info)."""
+    stats = {}
+    for module, items in grouped.items():
+        counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+        for f in items:
+            sev = f.get("severity", "info").lower()
+            if sev in counts:
+                counts[sev] += 1
+        stats[module] = counts
+    return stats
+
+
+def _severity_summary_text(counts):
+    parts = []
+    labels = (("high", "High"), ("medium", "Medium"), ("low", "Low"))
+    for key, label in labels:
+        count = counts.get(key, 0)
+        if count:
+            parts.append(f"{count} {label}")
+    return ", ".join(parts)
+
+
+def _sort_grouped_findings(grouped):
+    sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+    for items in grouped.values():
+        items.sort(key=lambda f: sev_order.get(f.get("severity", "info").lower(), 5))
+
+
+def _priority_groups(priority_actions):
+    groups = []
+    lookup = {}
+    for item in priority_actions:
+        module = item.get("module_name") or item.get("task_type") or "unknown"
+        if module not in lookup:
+            lookup[module] = {"module": module, "items": []}
+            groups.append(lookup[module])
+        lookup[module]["items"].append(item)
+    return groups
+
+
+def _prepare_findings_for_display(findings, grouped):
+    """Attach stable DOM ids and return the highest-priority non-info findings."""
+    sev_weights = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+    module_lookup = {}
+    for module, items in grouped.items():
+        for finding in items:
+            module_lookup[(finding.get("issue"), finding.get("evidence"))] = module
+
+    for idx, finding in enumerate(findings, 1):
+        finding["_issue_id"] = f"finding-{idx}"
+        if not finding.get("module_name") and not finding.get("task_type"):
+            module = module_lookup.get((finding.get("issue"), finding.get("evidence")))
+            if module:
+                finding["module_name"] = module
+        _ensure_remediation(finding)
+
+    issue_lookup = {
+        (
+            f.get("module_name") or f.get("task_type") or "unknown",
+            f.get("issue"),
+            f.get("evidence"),
+        ): f.get("_issue_id")
+        for f in findings
+    }
+    fallback_idx = len(findings) + 1
+    for module, items in grouped.items():
+        for finding in items:
+            key = (module, finding.get("issue"), finding.get("evidence"))
+            finding["_issue_id"] = issue_lookup.get(key, finding.get("_issue_id"))
+            if not finding.get("_issue_id"):
+                finding["_issue_id"] = f"finding-{fallback_idx}"
+                fallback_idx += 1
+            _ensure_remediation(finding)
+
+    actionable = [
+        f for f in findings
+        if f.get("severity", "").lower() in sev_weights
+    ]
+    actionable.sort(
+        key=lambda f: (
+            sev_weights.get(f.get("severity", "").lower(), 0),
+            -findings.index(f),
+        ),
+        reverse=True,
+    )
+    return actionable[:3]
 
 
 @app.route("/results/<scan_id>")
 def results(scan_id):
     data = commands.get_results(scan_id)
-    findings = data.get("findings", [])
+    if "error" in data:
+        return data["error"]
 
-    # Group by module_name
-    from collections import defaultdict
-    grouped = defaultdict(list)
-    for f in findings:
-        grouped[f.get("module_name", "unknown")].append(f)
+    findings = data.get("results", data.get("findings", []))
+    grouped = data.get("grouped", {})
+    ran_modules = data.get("ran_modules", [])
+    skipped_modules = data.get("skipped_modules", [])
+    target = data.get("target", "")
+    _sort_grouped_findings(grouped)
 
-    all_modules = ["http_headers", "tls", "dns", "xss"]
-    ran_modules = list(grouped.keys())
-    skipped_modules = [m for m in all_modules if m not in ran_modules]
+    active_modules = [m for m in MODULE_ORDER if m in grouped]
+    domain_display = extract_domain(target) if target else "Unknown"
+    risk_grade, risk_label, vuln_count = _compute_risk(findings)
+    severity_counts = _severity_counts(findings)
+    tab_stats = _module_tab_stats(grouped)
+    tab_summary = {
+        module: _severity_summary_text(counts)
+        for module, counts in tab_stats.items()
+    }
+    priority_actions = _prepare_findings_for_display(findings, grouped)
+    priority_groups = _priority_groups(priority_actions)
 
     return render_template(
         "results.html",
         scan_id=scan_id,
-        grouped=dict(grouped),
+        target=target,
+        domain_display=domain_display,
+        grouped=grouped,
         results=findings,
         ran_modules=ran_modules,
-        skipped_modules=skipped_modules
+        skipped_modules=skipped_modules,
+        ran_modules_display=_label_modules(ran_modules),
+        skipped_modules_display=_label_modules(skipped_modules),
+        active_modules=active_modules,
+        module_labels=MODULE_LABELS,
+        module_order=MODULE_ORDER,
+        risk_grade=risk_grade,
+        risk_label=risk_label,
+        vuln_count=vuln_count,
+        severity_counts=severity_counts,
+        tab_stats=tab_stats,
+        tab_summary=tab_summary,
+        priority_actions=priority_actions,
+        priority_groups=priority_groups,
     )
 
 
@@ -143,7 +361,7 @@ def download_report(scan_id):
     import io
 
     data = commands.get_results(scan_id)
-    findings = data.get("findings", [])
+    findings = data.get("results", data.get("findings", []))
     target = data.get("target", "Unknown")
 
     sev_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'info': 4}
@@ -300,4 +518,6 @@ def download_report(scan_id):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    port = int(os.getenv("PORT", "5000"))
+    debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+    app.run(host="0.0.0.0", port=port, debug=debug)
