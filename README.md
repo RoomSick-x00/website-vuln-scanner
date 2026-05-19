@@ -14,7 +14,7 @@ Flask web UI.
 - Workers / scanner modules: Python
 - Database: PostgreSQL
 - Frontend: Flask web UI + CLI
-- Deployment: Docker Compose under `deployment/`
+- Deployment: Docker Compose locally; Railway service notes under `deployment/`
 
 ## Repo Structure
 
@@ -181,38 +181,24 @@ The token is deterministic for a domain, so returning later with the same
 domain will produce the same TXT value. DNS propagation can take up to 15
 minutes.
 
-Production-intended backend behavior:
+Backend behavior:
 
 1. Create scan with `status=QUEUED`, `verified=False`, and token stored.
 2. Do not enqueue Full/XSS modules yet.
-3. User verifies DNS.
+3. User verifies DNS, or submits after the TXT record already exists.
 4. Backend sets `verified=True`.
 5. Backend enqueues the scan.
 
-Current demo behavior is intentionally more permissive. See the temporary
-verify bypass section below.
+The web UI calls `/api/verify-domain` before submitting Full/XSS scans, and the
+backend re-checks the same TXT record before queueing those scan modules.
 
-## Temporary Verify Bypass
-
-Domain verification is currently forced to succeed for UI testing in
-`frontend/web_ui/templates/verify.html` inside `verifyDomain()`.
-
-To disable the bypass before shipping, remove:
-
-```js
-const verificationResult = { success: true };
-```
-
-Then uncomment the real `/api/verify-domain` fetch block directly below it.
+## Verification Demo States
 
 For screenshots, append one of these query params to the verify page URL:
 
 - `?verify_state=checking` keeps the button in the checking state.
 - `?verify_state=failed` shows the failed state.
-- Omit the param to use the temporary success bypass.
-
-Before production, also update the backend flow so Full/XSS scans are not
-enqueued until domain verification succeeds.
+- Omit the param to use real TXT verification.
 
 ## Results And Reports
 
@@ -254,8 +240,6 @@ than pytest-style collected tests.
 
 ## Pre-Ship Checklist
 
-- Remove temporary verification bypass.
-- Enforce backend verification gating for Full/XSS scans.
 - Add a durable `/verify/<scan_id>` resume flow if users should return later.
 - Run one Quick Scan end to end.
 - Run one Full/XSS scan after real DNS verification.

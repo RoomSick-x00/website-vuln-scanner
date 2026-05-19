@@ -4,12 +4,13 @@ from celery import Celery
 # REDIS_URL can be set via environment variable.
 # Local development defaults to redis://localhost:6379/0
 # Docker sets this via docker-compose.yml e.g. REDIS_URL=redis://redis:6380/0
-redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+broker_url = os.getenv("CELERY_BROKER_URL") or os.getenv("REDIS_URL", "redis://localhost:6379/0")
+result_backend = os.getenv("CELERY_RESULT_BACKEND") or os.getenv("REDIS_URL") or broker_url
 
 app = Celery(
     "website_vuln_scanner",
-    broker=redis_url,
-    backend=redis_url,
+    broker=broker_url,
+    backend=result_backend,
     include=["tasks.scan_tasks", "workers.processor"],
 )
 

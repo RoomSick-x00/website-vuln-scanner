@@ -132,17 +132,12 @@ async function verifyDomain() {
             throw new Error('Forced verification failure');
         }
 
-        // TEMP VERIFY BYPASS: hardcoded for UI testing only.
-        // Disable before shipping by replacing this with the real /api/verify-domain fetch below.
-        const verificationResult = { success: true };
-        /*
         const res = await fetch(
             '/api/verify-domain?domain=' + encodeURIComponent(domain) +
             '&token=' + encodeURIComponent(token)
         );
         const data = await res.json();
         const verificationResult = { success: data.verified };
-        */
 
         if (verificationResult.success) {
             successMsg.textContent = '\u2713 Domain verified. Starting scan...';

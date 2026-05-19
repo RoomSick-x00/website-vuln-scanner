@@ -3,3 +3,4 @@ requests
 reportlab
 dnspython
 cryptography
+gunicorn

@@ -58,6 +58,20 @@ def _build_scan_detail(scan: Scan) -> ScanDetailResponse:
     )
 
 
+def _domain_has_verification_token(domain: str, token: str) -> bool:
+    txt_host = f"_vuln-verify.{domain}"
+    try:
+        answers = dns.resolver.resolve(txt_host, "TXT")
+        for record in answers:
+            for chunk in record.strings:
+                value = chunk.decode(errors="ignore") if isinstance(chunk, bytes) else str(chunk)
+                if token in value:
+                    return True
+    except Exception:
+        return False
+    return False
+
+
 @router.post("/", response_model=ScanResponse)
 def create_scan(scan: ScanCreate, db: Session = Depends(get_db)):
     scan_id = str(uuid4())
@@ -80,6 +94,11 @@ def create_scan(scan: ScanCreate, db: Session = Depends(get_db)):
     verification_token = (
         generate_verification_token(domain) if needs_verification else None
     )
+    verified = (
+        _domain_has_verification_token(domain, verification_token)
+        if verification_token
+        else True
+    )
 
     new_scan = Scan(
         id=scan_id,
@@ -89,7 +108,7 @@ def create_scan(scan: ScanCreate, db: Session = Depends(get_db)):
         status=ScanStatus.QUEUED,
         completed_modules=[],
         verification_token=verification_token,
-        verified=not needs_verification,
+        verified=verified,
     )
 
     if stored_mode == "custom":
@@ -99,7 +118,8 @@ def create_scan(scan: ScanCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_scan)
 
-    enqueue_scan(scan_id, scan.target, stored_mode, scan_modules)
+    if verified:
+        enqueue_scan(scan_id, scan.target, stored_mode, scan_modules)
 
     return new_scan
 
@@ -148,21 +168,17 @@ def verify_scan_domain(scan_id: str, db: Session = Depends(get_db)):
     token = scan.verification_token or generate_verification_token(domain)
     txt_host = f"_vuln-verify.{domain}"
 
-    try:
-        answers = dns.resolver.resolve(txt_host, "TXT")
-        for record in answers:
-            for chunk in record.strings:
-                value = chunk.decode(errors="ignore") if isinstance(chunk, bytes) else str(chunk)
-                if token in value:
-                    scan.verified = True
-                    scan.verification_token = token
-                    db.commit()
-                    return VerifyDomainResponse(
-                        verified=True,
-                        message="Domain verified successfully.",
-                    )
-    except Exception:
-        pass
+    if _domain_has_verification_token(domain, token):
+        scan.verified = True
+        scan.verification_token = token
+        if scan.status == ScanStatus.QUEUED:
+            ran_modules, _ = _modules_for_scan(scan)
+            enqueue_scan(scan.id, scan.target, scan.scan_mode, ran_modules)
+        db.commit()
+        return VerifyDomainResponse(
+            verified=True,
+            message="Domain verified successfully.",
+        )
 
     return VerifyDomainResponse(
         verified=False,
