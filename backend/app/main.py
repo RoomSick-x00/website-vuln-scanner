@@ -37,7 +37,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
         response.headers["Origin-Agent-Cluster"] = "?1"
         response.headers["Referrer-Policy"] = "no-referrer"
-        response.headers.pop("Server", None)
         return response
 
 
