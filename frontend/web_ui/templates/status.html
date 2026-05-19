@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scanning...</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body class="status-page app-shell">
 <div class="background"></div>
@@ -65,7 +64,7 @@
     </p>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 const scanId = "{{ scan_id }}";
 const STEP_CONFIG = [
     { id: 'connect', message: 'Connecting to target...', duration: 3000, progress: 16 },

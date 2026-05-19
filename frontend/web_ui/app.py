@@ -1,7 +1,8 @@
-from flask import Flask, render_template, request, make_response, jsonify
+from flask import Flask, render_template, request, make_response, jsonify, g
 import os
 import sys
 import hashlib
+import secrets
 import dns.resolver
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -12,6 +13,54 @@ app = Flask(
 )
 sys.path.append(os.path.abspath(os.path.join(BASE_DIR, "..", "cli")))
 import commands_cli as commands
+
+
+SECURITY_HEADERS = {
+    "Cross-Origin-Embedder-Policy": "require-corp",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "Cache-Control": "no-store",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "X-Permitted-Cross-Domain-Policies": "none",
+    "Origin-Agent-Cluster": "?1",
+    "Referrer-Policy": "no-referrer",
+}
+
+
+@app.before_request
+def set_csp_nonce():
+    g.csp_nonce = secrets.token_urlsafe(16)
+
+
+@app.context_processor
+def inject_csp_nonce():
+    return {"csp_nonce": lambda: g.csp_nonce}
+
+
+@app.after_request
+def add_security_headers(response):
+    csp = (
+        "default-src 'self'; "
+        "base-uri 'self'; "
+        "object-src 'none'; "
+        "frame-ancestors 'none'; "
+        "form-action 'self'; "
+        f"script-src 'self' 'nonce-{g.csp_nonce}'; "
+        "script-src-attr 'unsafe-inline'; "
+        "style-src 'self'; "
+        "style-src-attr 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "connect-src 'self'"
+    )
+    response.headers["Content-Security-Policy"] = csp
+    for header, value in SECURITY_HEADERS.items():
+        response.headers[header] = value
+    response.headers.pop("Server", None)
+    return response
 
 
 def extract_domain(target: str) -> str:
@@ -35,6 +84,13 @@ def target_display(target):
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/logout", methods=["GET", "POST"])
+def logout():
+    response = make_response("", 204)
+    response.headers["Clear-Site-Data"] = '"*"'
+    return response
 
 
 @app.route("/api/status/<scan_id>")
