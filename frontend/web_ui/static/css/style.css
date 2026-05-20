@@ -114,74 +114,37 @@ body {
 .url-field-wrap { position: relative; margin-bottom: 6px; }
 .url-input {
     width: 100%;
-    padding: 12px 40px 12px 14px;
+    padding: 12px 14px;
     font-size: 14px;
     border: 1px solid #d1d5db;
     border-radius: var(--radius);
     background: var(--surface);
     color: var(--text);
     outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
 }
 .url-input:focus {
-    border: 2px solid #0d9488;
-    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12);
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+    background: #ffffff;
 }
-.url-input.url-valid { border-color: #d1d5db; }
-.url-input.url-invalid { border-color: var(--danger); }
-.url-input:focus,
-.url-input.url-valid:focus {
-    border: 2px solid #0d9488;
+.url-input.url-valid {
+    border-color: #0d9488;
     box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12);
+    background: #f0fdfa;
+}
+.url-input.url-valid:focus {
+    border-color: #0f766e;
+    box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.18);
+}
+.url-input.url-invalid {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+    background: #fef2f2;
 }
 .url-input.url-invalid:focus {
-    border: 2px solid var(--danger);
-    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
-}
-.url-validation-icon {
-    position: absolute;
-    right: 14px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    pointer-events: none;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 12px;
-    font-weight: 700;
-    line-height: 1;
-}
-.url-validation-icon.valid,
-.url-validation-icon.invalid { display: flex; pointer-events: auto; }
-.url-validation-icon.valid { background: var(--success); }
-.url-validation-icon.valid::before { content: "\2713"; }
-.url-validation-icon.invalid { background: var(--danger); }
-.url-validation-icon.invalid::before { content: "!"; }
-.url-validation-icon.valid::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    right: 0;
-    top: calc(100% + 8px);
-    padding: 5px 8px;
-    border-radius: 4px;
-    background: var(--text);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 500;
-    white-space: nowrap;
-    opacity: 0;
-    transform: translateY(-2px);
-    transition: opacity 0.12s, transform 0.12s;
-    pointer-events: none;
-    z-index: 5;
-}
-.url-validation-icon.valid:hover::after,
-.url-validation-icon.valid:focus::after {
-    opacity: 1;
-    transform: translateY(0);
+    border-color: #b91c1c;
+    box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.18);
 }
 .url-error { color: var(--danger); font-size: 12px; margin-top: 6px; min-height: 18px; }
 .input-hint { display: none; color: var(--text-muted); font-size: 12px; margin-top: 4px; }
