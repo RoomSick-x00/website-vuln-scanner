@@ -36,7 +36,7 @@
                         </span>
                         <span class="mode-desc">TLS, HTTP Headers, DNS — ~30 seconds</span>
                     </span>
-                    <input type="radio" name="scan_mode" value="quick" checked onchange="onModeChange(this)">
+                    <input type="radio" name="scan_mode" value="quick" checked>
                 </label>
                 <label class="mode-card" id="mode-full">
                     <span class="mode-radio" aria-hidden="true"></span>
@@ -44,7 +44,7 @@
                         <span class="mode-title">Full Scan</span>
                         <span class="mode-desc">All checks including XSS — ~60 seconds</span>
                     </span>
-                    <input type="radio" name="scan_mode" value="full" onchange="onModeChange(this)">
+                    <input type="radio" name="scan_mode" value="full">
                 </label>
                 <label class="mode-card mode-card-custom" id="mode-custom">
                     <div class="mode-card-row">
@@ -53,7 +53,7 @@
                             <span class="mode-title">Custom Scan</span>
                             <span class="mode-desc" id="customModeDesc">Choose individual scanners</span>
                         </span>
-                        <input type="radio" name="scan_mode" value="custom" onchange="onModeChange(this)">
+                        <input type="radio" name="scan_mode" value="custom">
                     </div>
                     <div class="custom-modules-panel" id="customModules">
                         <div class="custom-modules-header">
@@ -297,6 +297,12 @@ document.querySelectorAll('.module-btn').forEach(function (btn) {
         onXssToggle();
         updateCustomEstimate();
         updateSubmitState();
+    });
+});
+
+document.querySelectorAll('input[name="scan_mode"]').forEach(function (radio) {
+    radio.addEventListener('change', function () {
+        onModeChange(radio);
     });
 });
 

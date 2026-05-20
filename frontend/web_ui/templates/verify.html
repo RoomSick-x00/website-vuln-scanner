@@ -36,7 +36,7 @@
                     <strong>Add a TXT record</strong>
                     <span class="step-estimate">~2 min</span>
                     <div class="txt-record dns-record">
-                        <button type="button" class="copy-btn copy-btn-inline" onclick="copyRecord()" title="Copy full record">Copy all</button>
+                        <button type="button" class="copy-btn copy-btn-inline" id="copyRecordBtn" title="Copy full record">Copy all</button>
                         <div class="txt-record-row">
                             <span class="txt-record-label dns-record-label">Type</span>
                             <strong class="txt-record-value dns-record-value">TXT</strong>
@@ -44,12 +44,12 @@
                         <div class="txt-record-row">
                             <span class="txt-record-label dns-record-label">Name/Host</span>
                             <strong class="txt-record-value dns-record-value">{{ txt_host }}</strong>
-                            <button type="button" class="copy-field-btn" onclick='copyField({{ txt_host | tojson }}, this)' title="Copy Name/Host" aria-label="Copy Name/Host">Copy</button>
+                            <button type="button" class="copy-field-btn" data-copy="{{ txt_host }}" title="Copy Name/Host" aria-label="Copy Name/Host">Copy</button>
                         </div>
                         <div class="txt-record-row">
                             <span class="txt-record-label dns-record-label">Value</span>
                             <strong class="txt-record-value dns-record-value">{{ token }}</strong>
-                            <button type="button" class="copy-field-btn" onclick='copyField({{ token | tojson }}, this)' title="Copy Value" aria-label="Copy Value">Copy</button>
+                            <button type="button" class="copy-field-btn" data-copy="{{ token }}" title="Copy Value" aria-label="Copy Value">Copy</button>
                         </div>
                     </div>
                     <p class="dns-hint">
@@ -72,7 +72,7 @@
         </p>
 
         <div class="status-msg success" id="verifySuccessMsg"></div>
-        <button type="button" class="verify-btn" id="verifyBtn" onclick="verifyDomain()">
+        <button type="button" class="verify-btn" id="verifyBtn">
             Verify and Start Scan
         </button>
         <div class="verify-error-msg" id="verifyErrorMsg"></div>
@@ -110,6 +110,14 @@ function copyRecord() {
 function copyField(value, btn) {
     copyText(value, btn);
 }
+
+document.getElementById('copyRecordBtn').addEventListener('click', copyRecord);
+document.querySelectorAll('.copy-field-btn[data-copy]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        copyField(btn.getAttribute('data-copy'), btn);
+    });
+});
+document.getElementById('verifyBtn').addEventListener('click', verifyDomain);
 
 async function verifyDomain() {
     const btn = document.getElementById('verifyBtn');

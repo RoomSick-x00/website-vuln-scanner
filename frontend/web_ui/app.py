@@ -49,7 +49,7 @@ def add_security_headers(response):
         "frame-ancestors 'none'; "
         "form-action 'self'; "
         f"script-src 'self' 'nonce-{g.csp_nonce}'; "
-        "script-src-attr 'unsafe-inline'; "
+        "script-src-attr 'none'; "
         "style-src 'self'; "
         "style-src-attr 'unsafe-inline'; "
         "img-src 'self' data:; "
