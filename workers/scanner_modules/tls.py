@@ -503,10 +503,17 @@ class TLSScanner(BaseScanner):
 
             s = socket.create_connection((host, port), timeout=timeout)
             ts = ctx.wrap_socket(s, server_hostname=host)
+            tls_version = ts.version()
             cipher_name = ts.cipher()[0] if ts.cipher() else ""
             ts.close()
 
-            if any(kex in cipher_name.upper() for kex in ("ECDHE", "DHE")):
+            if tls_version == "TLSv1.3":
+                findings.append(self._finding(
+                    "Forward secrecy supported",
+                    f"Server negotiated TLS 1.3 cipher: {cipher_name}",
+                    "info",
+                ))
+            elif any(kex in cipher_name.upper() for kex in ("ECDHE", "DHE")):
                 findings.append(self._finding(
                     "Forward secrecy supported",
                     f"Server negotiated PFS cipher: {cipher_name}",

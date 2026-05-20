@@ -26,13 +26,6 @@ class HTTPHeadersScanner(BaseScanner):
             "remediation": "Add 'Cache-Control: no-store' to prevent sensitive data being cached by browsers or proxies.",
         },
         {
-            "name": "Clear-Site-Data",
-            "severity": "low",
-            "check_type": "present",
-            "score_penalty": 5,
-            "remediation": "Add 'Clear-Site-Data: *' on logout responses to clear client-side storage.",
-        },
-        {
             "name": "Content-Security-Policy",
             "value": "default-src 'self'",
             "severity": "high",
@@ -202,6 +195,7 @@ class HTTPHeadersScanner(BaseScanner):
             findings.extend(self._check_dangerous_headers(response_headers))
             findings.extend(self._check_hsts(response_headers))
             findings.extend(self._check_csp(response_headers))
+            findings.extend(self._check_clear_site_data(target, response_headers))
 
         except requests.RequestException as e:
             return [self._finding(
@@ -213,6 +207,24 @@ class HTTPHeadersScanner(BaseScanner):
             )]
 
         return findings
+
+    def _check_clear_site_data(self, target: str, response_headers: dict) -> list:
+        parsed_path = requests.utils.urlparse(target).path.lower().rstrip("/")
+        logout_paths = {"/logout", "/signout", "/sign-out", "/auth/logout", "/session/logout"}
+        if parsed_path not in logout_paths:
+            return []
+
+        observed = response_headers.get("clear-site-data")
+        if observed:
+            return []
+
+        return [self._finding(
+            issue="Clear-Site-Data header missing on logout response",
+            evidence="Logout-like response did not include Clear-Site-Data",
+            severity="low",
+            remediation="Add 'Clear-Site-Data: \"*\"' on logout responses to clear client-side storage.",
+            score_penalty=5,
+        )]
     
     def _check_dangerous_headers(self, response_headers: dict) -> list:
         """
@@ -254,15 +266,29 @@ class HTTPHeadersScanner(BaseScanner):
 
         for header in dangerous:
             if header["name"] in response_headers:
+                observed = response_headers[header["name"]]
+                if header["name"] == "server" and self._is_generic_edge_header(observed):
+                    continue
                 findings.append(self._finding(
                     issue=header["issue"],
-                    evidence=f"Header present with value: '{response_headers[header['name']]}'",
+                    evidence=f"Header present with value: '{observed}'",
                     severity="medium",
                     remediation=header["remediation"],
                     score_penalty=header["score_penalty"],
                 ))
 
         return findings
+
+    def _is_generic_edge_header(self, value: str) -> bool:
+        generic_edge_values = {
+            "railway-edge",
+            "cloudflare",
+            "vercel",
+            "fly",
+            "fastly",
+        }
+        normalized = value.strip().lower()
+        return normalized in generic_edge_values
 
 
     def _check_hsts(self, response_headers: dict) -> list:
@@ -336,42 +362,57 @@ class HTTPHeadersScanner(BaseScanner):
         if not csp:
             return findings  # Already caught by the main HEADERS check
 
-        dangerous_values = [
-            {
-                "value": "unsafe-inline",
-                "issue": "CSP allows unsafe-inline scripts",
-                "remediation": "Remove 'unsafe-inline' from CSP and use nonces or hashes instead. "
-                            "See https://csp-evaluator.withgoogle.com",
-                "score_penalty": 20,
-            },
-            {
-                "value": "unsafe-eval",
-                "issue": "CSP allows unsafe-eval",
-                "remediation": "Remove 'unsafe-eval' from CSP. Refactor code that uses eval(), "
-                            "setTimeout(string), or similar patterns.",
-                "score_penalty": 20,
-            },
-            {
-                "value": "default-src *",
-                "issue": "CSP uses wildcard default-src",
-                "remediation": "Replace 'default-src *' with explicit trusted sources. "
-                            "A wildcard CSP provides no protection.",
-                "score_penalty": 25,
-            },
-        ]
+        directives = {}
+        for raw_directive in csp.split(";"):
+            parts = raw_directive.strip().lower().split()
+            if not parts:
+                continue
+            directives[parts[0]] = parts[1:]
 
-        for item in dangerous_values:
-            if item["value"] in csp.lower():
-                offending_directive = next(
-                    (d.strip() for d in csp.split(";") if item["value"] in d.lower()),
-                    "unknown directive"
-                )
-                findings.append(self._finding(
-                    issue=item["issue"],
-                    evidence=f"Found in directive: '{offending_directive}'",
-                    severity="high",
-                    remediation=item["remediation"],
-                    score_penalty=item["score_penalty"],
-                ))
+        def directive_text(name: str) -> str:
+            values = directives.get(name, [])
+            return " ".join([name] + values) if values else name
+
+        script_values = (
+            directives.get("script-src")
+            or directives.get("default-src")
+            or []
+        )
+        script_attr_values = directives.get("script-src-attr", [])
+
+        if "'unsafe-inline'" in script_values or "'unsafe-inline'" in script_attr_values:
+            offending_directive = (
+                directive_text("script-src")
+                if "'unsafe-inline'" in script_values
+                else directive_text("script-src-attr")
+            )
+            findings.append(self._finding(
+                issue="CSP allows unsafe-inline scripts",
+                evidence=f"Found in directive: '{offending_directive}'",
+                severity="high",
+                remediation="Remove 'unsafe-inline' from script CSP directives and use nonces or hashes instead. "
+                            "See https://csp-evaluator.withgoogle.com",
+                score_penalty=20,
+            ))
+
+        if "'unsafe-eval'" in script_values:
+            findings.append(self._finding(
+                issue="CSP allows unsafe-eval",
+                evidence=f"Found in directive: '{directive_text('script-src')}'",
+                severity="high",
+                remediation="Remove 'unsafe-eval' from CSP. Refactor code that uses eval(), "
+                            "setTimeout(string), or similar patterns.",
+                score_penalty=20,
+            ))
+
+        if "*" in directives.get("default-src", []):
+            findings.append(self._finding(
+                issue="CSP uses wildcard default-src",
+                evidence=f"Found in directive: '{directive_text('default-src')}'",
+                severity="high",
+                remediation="Replace 'default-src *' with explicit trusted sources. "
+                            "A wildcard CSP provides no protection.",
+                score_penalty=25,
+            ))
 
         return findings

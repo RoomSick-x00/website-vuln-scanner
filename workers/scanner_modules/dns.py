@@ -14,6 +14,15 @@ class DNSScanner(BaseScanner):
     display_name = "DNS Configuration"
     tier = "passive"
 
+    MANAGED_PLATFORM_SUFFIXES = (
+        ".up.railway.app",
+        ".railway.app",
+        ".vercel.app",
+        ".netlify.app",
+        ".fly.dev",
+        ".render.com",
+    )
+
     def _dns_error_finding(
         self,
         *,
@@ -53,6 +62,17 @@ class DNSScanner(BaseScanner):
                 remediation="Ensure the URL is well-formed, e.g. https://example.com",
             )]
 
+        if self._is_managed_platform_domain(domain):
+            return [self._finding(
+                issue="Managed platform domain detected",
+                evidence=f"{domain} is a provider-owned deployment subdomain.",
+                severity="info",
+                remediation=(
+                    "DNS ownership checks such as SPF, DMARC, DNSSEC, and CAA are only actionable "
+                    "on a domain you control. Attach a custom domain and scan that domain for DNS hardening."
+                ),
+            )]
+
         # Run all checks
         findings.extend(self._check_spf(domain))
         findings.extend(self._check_dmarc(domain))
@@ -61,6 +81,10 @@ class DNSScanner(BaseScanner):
         findings.extend(self._check_mx(domain))
 
         return findings
+
+    def _is_managed_platform_domain(self, domain: str) -> bool:
+        normalized = domain.lower().rstrip(".")
+        return any(normalized.endswith(suffix) for suffix in self.MANAGED_PLATFORM_SUFFIXES)
     
     def _check_spf(self, domain: str) -> list[Finding]:
         """
