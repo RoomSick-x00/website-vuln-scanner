@@ -62,6 +62,15 @@ class DNSScanner(BaseScanner):
                 remediation="Ensure the URL is well-formed, e.g. https://example.com",
             )]
 
+        if "." not in domain:
+            return [self._finding(
+                issue="Invalid domain name",
+                evidence=f"'{domain}' is not a fully qualified domain name.",
+                severity="medium",
+                remediation="Enter a real domain such as example.com before running DNS security checks.",
+                score_penalty=20,
+            )]
+
         if self._is_managed_platform_domain(domain):
             return [self._finding(
                 issue="Managed platform domain detected",
@@ -71,6 +80,16 @@ class DNSScanner(BaseScanner):
                     "DNS ownership checks such as SPF, DMARC, DNSSEC, and CAA are only actionable "
                     "on a domain you control. Attach a custom domain and scan that domain for DNS hardening."
                 ),
+            )]
+
+        exists, evidence = self._domain_exists(domain)
+        if not exists:
+            return [self._finding(
+                issue="Domain does not exist",
+                evidence=evidence,
+                severity="medium",
+                remediation="Verify the domain name is correct before running DNS security checks.",
+                score_penalty=20,
             )]
 
         # Run all checks
@@ -85,6 +104,24 @@ class DNSScanner(BaseScanner):
     def _is_managed_platform_domain(self, domain: str) -> bool:
         normalized = domain.lower().rstrip(".")
         return any(normalized.endswith(suffix) for suffix in self.MANAGED_PLATFORM_SUFFIXES)
+
+    def _domain_exists(self, domain: str) -> tuple[bool, str]:
+        resolver = dns.resolver.Resolver()
+        resolver.timeout = 2
+        resolver.lifetime = 4
+        try:
+            resolver.resolve(domain, "A", search=False)
+            return True, f"A record found for {domain}"
+        except dns.resolver.NXDOMAIN:
+            return False, f"NXDOMAIN response for {domain}"
+        except dns.resolver.NoAnswer:
+            return True, f"Domain exists but has no A record: {domain}"
+        except dns.resolver.NoNameservers:
+            return True, f"Domain exists but authoritative nameservers did not answer for {domain}"
+        except dns.resolver.Timeout:
+            return True, f"DNS lookup timed out while checking whether {domain} exists"
+        except Exception as e:
+            return True, f"DNS existence precheck inconclusive for {domain}: {type(e).__name__}: {e}"
     
     def _check_spf(self, domain: str) -> list[Finding]:
         """
