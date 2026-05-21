@@ -1,4 +1,29 @@
-# Railway Deployment
+# Deployment
+
+This folder contains local Docker Compose configuration, service Dockerfiles,
+and Railway deployment notes.
+
+## Files
+
+- `docker-compose.yml` starts PostgreSQL, Redis, FastAPI backend, Celery worker,
+  and Flask frontend for local containerized development.
+- `DockerFile.backend` builds the FastAPI API image and starts Uvicorn.
+- `Dockerfile.worker` builds the Celery worker image and starts the worker
+  process.
+- `Dockerfile.frontend` builds the Flask/Gunicorn frontend image.
+- `README.md` documents the deployment workflow and hosting-specific security
+  notes.
+
+## Local Docker Workflow
+
+1. PostgreSQL stores scan rows and findings.
+2. Redis acts as Celery broker/result backend.
+3. The backend service exposes the API on port `8000`.
+4. The worker service consumes Celery jobs and writes findings to PostgreSQL.
+5. The frontend service exposes the web UI on port `5000` and talks to the
+   backend at `http://backend:8000`.
+
+## Railway Workflow
 
 Deploy this project as separate Railway services from the same GitHub repo.
 Do not deploy `deployment/docker-compose.yml` directly.
